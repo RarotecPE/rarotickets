@@ -195,7 +195,11 @@ export function AdminEventDetailPage() {
 
       {event && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Inscrições" value={String(event.registrationCount)} hint="confirmadas + pendentes" />
+          <StatCard
+            label="Vagas ocupadas"
+            value={String((seatUsage?.occupiedSeats ?? 0) + (seatUsage?.reservedSeats ?? 0))}
+            hint="confirmadas + reservas ativas"
+          />
           <StatCard
             label="Ocupação"
             value={`${(seatUsage?.occupiedSeats ?? 0) + (seatUsage?.reservedSeats ?? 0)}/${event.capacity}`}

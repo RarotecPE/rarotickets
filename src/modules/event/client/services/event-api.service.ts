@@ -98,7 +98,6 @@ export type EventSummaryView = {
   allowCreditCard: boolean;
   minInstallmentCents: number;
   responsibleName: string;
-  registrationCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -106,7 +105,7 @@ export type EventSummaryView = {
 export type ListedEventView = EventSummaryView & { seatUsage: EventSeatUsageView; isRegistrationOpen: boolean };
 
 export type AdminEventResponse = {
-  event: EventSummaryView & { formVersion: number; registrationCount: number };
+  event: EventSummaryView & { formVersion: number };
   seatUsage: EventSeatUsageView;
   lotes: EventLoteView[];
   formFields: EventFormFieldView[];
