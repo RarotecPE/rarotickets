@@ -1,0 +1,46 @@
+{
+  "name": "rarotickets",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RaroTickets — sistema de gerenciamento de eventos (Clean Architecture + DDD + isomórfico)",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --ignore \"src/modules/**/client/**\" --ignore \"src/client/**\" --ignore \"index.html\" src/server/bootstrap/main.ts",
+    "start": "NODE_ENV=production tsx src/server/bootstrap/main.ts",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "lint:architecture": "tsx scripts/check-architecture.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:reset": "tsx scripts/reset-database.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.6",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}

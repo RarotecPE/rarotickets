@@ -1,0 +1,9 @@
+export type Uuid = string;
+export type IsoDateString = string;
+export type IsoDateTimeString = string;
+export type Cents = number;
+export type CurrencyCode = 'BRL';
+export type EmailAddress = string;
+export type CpfDigits = string;
+export type CnpjDigits = string;
+export type UfCode = string;

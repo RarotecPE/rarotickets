@@ -1,0 +1,66 @@
+export type PaymentModel = {
+  id: string;
+  registration_id: string;
+  event_id: string;
+  participant_id: string | null;
+  method: string;
+  status: string;
+  amount_cents: number;
+  installments: number;
+  installment_amount_cents: number;
+  card_brand: string | null;
+  card_last4: string | null;
+  reference: string;
+  pagbank_charge_id: string | null;
+  pagbank_order_id: string | null;
+  provider_name: string | null;
+  provider_status: string | null;
+  authorization_code: string | null;
+  pix_qr_code: string | null;
+  pix_copy_paste: string | null;
+  pix_expires_at: Date | null;
+  boleto_barcode: string | null;
+  boleto_due_date: string | null;
+  paid_at: Date | null;
+  cancelled_at: Date | null;
+  cancel_reason: string | null;
+  refunded_cents: number;
+  refunded_at: Date | null;
+  refund_reason: string | null;
+  failure_reason: string | null;
+  expires_at: Date | null;
+  created_by: string | null;
+  created_at: Date;
+  updated_at: Date;
+};
+
+export type PaymentEventModel = {
+  id: string;
+  payment_id: string;
+  event_type: string;
+  status_from: string | null;
+  status_to: string | null;
+  provider_status: string | null;
+  description: string | null;
+  reason: string | null;
+  actor_user_id: string | null;
+  actor_name: string | null;
+  created_at: Date;
+};
+
+export type PaymentWebhookLogModel = {
+  id: string;
+  provider: string;
+  notification_id: string;
+  payment_id: string | null;
+  event_type: string | null;
+  pagbank_charge_id: string | null;
+  reference: string | null;
+  payload: Record<string, unknown>;
+  signature_valid: boolean;
+  status: string;
+  error_message: string | null;
+  attempts: number;
+  processed_at: Date | null;
+  created_at: Date;
+};

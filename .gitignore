@@ -1,0 +1,21 @@
+# Dependências
+node_modules/
+
+# Build
+dist/
+*.tsbuildinfo
+
+# Ambiente — nunca versionar credenciais reais
+.env
+.env.local
+.env.*.local
+
+# Banco de dados local (modo embarcado de desenvolvimento)
+.pgdata/
+pgdata/
+
+# Logs e cache
+*.log
+npm-debug.log*
+coverage/
+.vite/
