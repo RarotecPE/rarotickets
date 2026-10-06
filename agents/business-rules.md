@@ -1,990 +1,354 @@
-Quero que você analise, implemente e respeite as regras de negócio descritas neste documento para a construção de um sistema de gerenciamento de eventos.
-
-Este documento trata EXCLUSIVAMENTE das regras de negócio do sistema.
-
-As definições relacionadas a:
-
-- Tecnologias utilizadas
-- Arquitetura de software
-- Estrutura do projeto
-- Banco de dados e padrões técnicos
-- Padrões de desenvolvimento
-- Interface e identidade visual
-- Componentes visuais
-- Responsividade
-- Experiência do usuário
-- Organização das telas
-
-estão definidas em outros documentos do projeto que já foram elaborados.
-
-Esses documentos devem ser considerados em conjunto com este.
-
-Não altere, substitua ou redefina decisões técnicas, arquiteturais ou de interface com base neste documento.
-
-Caso exista qualquer conflito, utilize este documento como referência para as REGRAS DE NEGÓCIO e os demais documentos como referência para arquitetura, tecnologia e interface.
-
-# 1. OBJETIVO DO SISTEMA
-
-O sistema será utilizado para gerenciar eventos promovidos pela empresa.
-
-Os eventos poderão ser:
-
-- Gratuitos
-- Pagos
-- Presenciais
-- Online
-- Públicos
-- Privados
-- Exclusivos para convidados
-
-O sistema deverá controlar todo o ciclo do evento, incluindo:
-
-- Cadastro
-- Publicação
-- Inscrições
-- Participantes
-- Formulários de inscrição
-- Vagas
-- Lotes
-- Cupons
-- Pagamentos
-- Check-in
-- Presença
-- Certificados
-- Comunicações
-- Relatórios
-- Histórico
-
-# 2. EVENTOS
-
-Cada evento deverá possuir informações suficientes para controlar sua realização e suas inscrições.
-
-Entre as informações do evento deverão existir:
-
-- Título
-- Descrição
-- Descrição resumida
-- Imagem de divulgação
-- Data de início
-- Data de término
-- Horário de início
-- Horário de término
-- Local
-- Endereço
-- Município
-- Estado
-- Indicação se é online
-- Link para evento online, quando aplicável
-- Capacidade máxima
-- Período de inscrições
-- Responsável
-- Carga horária
-- Configuração para emissão de certificado
-- Configuração para lista de espera
-- Configurações relacionadas aos pagamentos
-
-O evento deverá possuir pelo menos os seguintes tipos:
-
-- GRATUITO
-- PAGO
-
-O evento deverá possuir controle de status.
-
-Status mínimos:
-
-- RASCUNHO
-- AGENDADO
-- INSCRICOES_ABERTAS
-- INSCRICOES_ENCERRADAS
-- EM_ANDAMENTO
-- FINALIZADO
-- CANCELADO
-
-Um evento em RASCUNHO não deverá aceitar inscrições públicas.
-
-Um evento CANCELADO não deverá aceitar novas inscrições.
-
-Um evento com inscrições encerradas não deverá permitir novas inscrições, salvo ação administrativa explicitamente autorizada.
-
-# 3. CAPACIDADE E CONTROLE DE VAGAS
-
-Cada evento poderá possuir uma capacidade máxima.
-
-O sistema deverá controlar automaticamente a quantidade de vagas disponíveis.
-
-Inscrições canceladas não deverão ocupar vaga.
-
-Inscrições em lista de espera não deverão ocupar vaga confirmada.
-
-Para eventos pagos, deverá existir uma regra clara para determinar em que momento uma inscrição passa a ocupar definitivamente uma vaga.
-
-O sistema deverá impedir que concorrência entre inscrições permita ultrapassar a capacidade do evento.
-
-Exemplo:
-
-Se existir apenas uma vaga disponível e duas pessoas tentarem confirmar a inscrição simultaneamente, apenas uma inscrição poderá ocupar essa vaga.
-
-# 4. RESERVA TEMPORÁRIA DE VAGA
-
-Eventos pagos poderão possuir reserva temporária de vaga durante o processo de pagamento.
-
-Exemplo:
-
-Uma pessoa inicia a inscrição às 10:00.
-
-A vaga poderá permanecer temporariamente reservada durante 15 minutos.
-
-Caso a inscrição ou o pagamento não seja concluído dentro do prazo configurado, a reserva deverá expirar.
-
-A vaga deverá então ser disponibilizada novamente.
-
-O período de reserva deverá ser configurável.
-
-Uma inscrição pendente não poderá bloquear uma vaga indefinidamente.
-
-# 5. LOTES
-
-Eventos pagos poderão possuir um ou vários lotes.
-
-Exemplo:
-
-1º lote  
-R$ 100,00  
-até 10/10
-
-2º lote  
-R$ 150,00  
-até 20/10
-
-3º lote  
-R$ 200,00  
-até o encerramento das inscrições
-
-Cada lote poderá possuir:
-
-- Nome
-- Descrição
-- Data de início
-- Data de término
-- Quantidade máxima
-- Valor
-- Situação ativo/inativo
-
-O sistema deverá identificar automaticamente o lote vigente considerando:
-
-- Período
-- Quantidade disponível
-- Situação do lote
-
-Quando um lote terminar por data ou quantidade, o próximo lote elegível deverá passar a ser utilizado.
-
-O valor utilizado na inscrição deverá ficar registrado para preservar o histórico, mesmo que posteriormente o preço do lote seja alterado.
-
-# 6. PARTICIPANTES
-
-O participante deverá possuir cadastro próprio e independente das inscrições.
-
-Uma mesma pessoa poderá participar de vários eventos sem necessidade de duplicar seu cadastro principal.
-
-Dados possíveis do participante:
-
-- Nome
-- CPF
-- E-mail
-- Telefone
-- Data de nascimento
-- Empresa
-- Cargo
-- Município
-- Estado
-- CNPJ
-
-Nem todos esses campos precisam ser obrigatórios em todos os eventos.
-
-A obrigatoriedade deverá depender das regras do formulário de inscrição.
-
-# 7. INSCRIÇÕES
-
-Uma inscrição deverá relacionar:
-
-- Participante
-- Evento
-- Lote, quando aplicável
-- Formulário respondido
-- Valor
-- Desconto
-- Valor final
-- Situação
-- Pagamento, quando aplicável
-
-Cada inscrição deverá possuir um código único.
-
-Status mínimos da inscrição:
-
-- PENDENTE
-- AGUARDANDO_PAGAMENTO
-- CONFIRMADA
-- CANCELADA
-- LISTA_ESPERA
-
-Uma inscrição gratuita poderá ser confirmada automaticamente após o cumprimento das regras de inscrição.
-
-Uma inscrição paga não deverá ser considerada confirmada somente porque o participante iniciou o pagamento.
-
-A confirmação deverá ocorrer após confirmação válida do pagamento, salvo situações administrativas específicas, como:
-
-- Cortesia
-- Isenção
-- Confirmação manual autorizada
-
-Toda alteração manual relevante deverá ser registrada para auditoria.
-
-# 8. FORMULÁRIO DE INSCRIÇÃO
-
-Cada evento poderá possuir seu próprio formulário.
-
-O formulário não deverá ser fixo para todos os eventos.
-
-O administrador deverá poder configurar quais informações serão solicitadas.
-
-Tipos de informações possíveis:
-
-- Texto
-- Texto longo
-- Número
-- Data
-- E-mail
-- Telefone
-- CPF
-- CNPJ
-- Seleção
-- Escolha única
-- Múltipla escolha
-- Sim/Não
-- Arquivo
-
-Cada campo deverá possuir regras como:
-
-- Nome
-- Descrição
-- Obrigatoriedade
-- Ordem
-- Opções de resposta
-- Situação ativo/inativo
-
-Exemplo:
-
-Evento sobre Reforma Tributária:
-
-- Nome
-- CPF
-- E-mail
-- Telefone
-- Órgão
-- Cargo
-- Município
-
-Outro evento poderá solicitar informações completamente diferentes.
-
-As respostas deverão permanecer vinculadas à inscrição correspondente.
-
-# 9. ALTERAÇÃO DO FORMULÁRIO
-
-Alterações posteriores no formulário não deverão destruir ou invalidar respostas de inscrições já realizadas.
-
-O sistema deverá preservar o histórico necessário para identificar quais informações foram fornecidas no momento da inscrição.
-
-# 10. EVENTOS GRATUITOS
-
-Para eventos gratuitos:
-
-1. O participante acessa o evento.
-2. Preenche o formulário.
-3. O sistema valida as informações.
-4. O sistema verifica disponibilidade.
-5. A inscrição é criada.
-6. Caso todas as regras sejam atendidas, a inscrição é confirmada.
-7. O participante recebe sua confirmação.
-
-Não deverá existir etapa obrigatória de pagamento.
-
-# 11. EVENTOS PAGOS
-
-Para eventos pagos:
-
-1. O participante acessa o evento.
-2. Preenche o formulário.
-3. O sistema valida as informações.
-4. Verifica disponibilidade.
-5. Identifica lote e valor.
-6. Aplica eventual desconto.
-7. Cria a inscrição pendente.
-8. O participante escolhe uma forma de pagamento.
-9. O pagamento é criado.
-10. O sistema aguarda confirmação válida.
-11. Após pagamento aprovado, a inscrição é confirmada.
-12. O participante recebe a confirmação.
-
-# 12. INTEGRAÇÃO COM PAGBANK/PAGSEGURO
-
-Os pagamentos dos eventos pagos deverão ser integrados com a API oficial atual do PagBank/PagSeguro.
-
-Inicialmente deverão ser aceitas:
-
-- PIX
-- Cartão de crédito
-- Boleto
-
-A implementação deverá utilizar as APIs oficiais atuais do PagBank.
-
-Não utilizar APIs legadas quando existir solução oficial atual equivalente.
-
-As regras técnicas específicas da integração deverão seguir a documentação oficial do PagBank e os documentos técnicos do projeto.
-
-# 13. REFERÊNCIA DO PAGAMENTO
-
-Toda cobrança deverá possuir uma referência interna que permita identificar claramente sua origem.
-
-Exemplo:
-
-EVENTO-120-INSCRICAO-4589
-
-A relação entre:
-
-- Evento
-- Inscrição
-- Pagamento interno
-- Transação do PagBank
-
-deverá ser preservada.
-
-O sistema não deverá depender exclusivamente de um identificador externo do PagBank para identificar uma inscrição.
-
-# 14. STATUS DOS PAGAMENTOS
-
-O sistema deverá possuir status internos próprios de pagamento.
-
-Status mínimos:
-
-- PENDENTE
-- AGUARDANDO
-- PAGO
-- RECUSADO
-- CANCELADO
-- EXPIRADO
-- ESTORNADO
-
-Os status recebidos do PagBank deverão ser convertidos para os status internos do sistema.
-
-As demais regras do sistema deverão depender dos status internos, e não diretamente da nomenclatura utilizada pelo PagBank.
-
-# 15. PAGAMENTO VIA PIX
-
-Quando o participante selecionar PIX:
-
-1. O sistema deverá gerar a cobrança correspondente.
-2. Deverá relacioná-la à inscrição.
-3. O participante deverá receber as informações necessárias para pagamento.
-4. A inscrição permanecerá aguardando pagamento.
-5. Quando houver confirmação válida, o pagamento será marcado como PAGO.
-6. A inscrição será confirmada.
-
-O sistema deverá considerar a expiração da cobrança PIX.
-
-Caso o PIX expire sem pagamento, o sistema deverá atualizar a situação correspondente e aplicar as regras de liberação da vaga.
-
-# 16. PAGAMENTO VIA BOLETO
-
-Quando o participante selecionar boleto:
-
-1. O sistema deverá gerar a cobrança.
-2. Relacionar o boleto à inscrição.
-3. Registrar vencimento.
-4. Aguardar confirmação bancária.
-
-A emissão do boleto não representa pagamento.
-
-A inscrição somente deverá ser confirmada quando existir confirmação válida do pagamento, salvo regra administrativa específica.
-
-Boletos vencidos poderão provocar expiração da inscrição ou necessidade de nova cobrança, de acordo com a situação do evento e disponibilidade de vagas.
-
-# 17. CARTÃO DE CRÉDITO
-
-O participante poderá pagar com cartão de crédito.
-
-O sistema poderá permitir parcelamento.
-
-A quantidade máxima de parcelas poderá ser configurada conforme as regras do evento.
-
-Não deverão ser armazenados dados sensíveis do cartão, como:
-
-- Número completo
-- CVV
-
-Poderão ser mantidas informações não sensíveis necessárias ao histórico, quando permitido, como:
-
-- Bandeira
-- Últimos quatro dígitos
-- Quantidade de parcelas
-
-A inscrição deverá ser confirmada apenas após aprovação válida da transação.
-
-# 18. DUPLICIDADE DE PAGAMENTO
-
-O sistema deverá impedir que ações repetidas do participante gerem cobranças desnecessariamente duplicadas.
-
-Exemplo:
-
-Se o usuário clicar duas vezes no botão de pagamento, isso não deverá necessariamente gerar duas cobranças distintas.
-
-Antes de criar uma nova cobrança, o sistema deverá verificar se existe tentativa válida de pagamento em andamento para a inscrição.
-
-# 19. CONFIRMAÇÃO DE PAGAMENTO
-
-A confirmação financeira não deverá depender apenas do retorno do participante para o sistema após o pagamento.
-
-O sistema deverá receber e processar as notificações fornecidas pelo PagBank.
-
-Quando um pagamento for confirmado:
-
-Pagamento = PAGO
-
-Inscrição = CONFIRMADA
-
-As ações posteriores relacionadas à confirmação deverão então ser executadas.
-
-# 20. NOTIFICAÇÕES DO PAGBANK
-
-As notificações recebidas do PagBank deverão ser processadas de maneira idempotente.
-
-Isso significa que a mesma notificação poderá ser recebida várias vezes sem executar várias vezes a mesma operação de negócio.
-
-Exemplo:
-
-Se uma confirmação de pagamento for recebida cinco vezes, a inscrição deverá continuar existindo apenas uma vez e nenhuma ação financeira deverá ser duplicada.
-
-As notificações deverão possuir histórico para permitir auditoria e análise de falhas.
-
-# 21. RECONCILIAÇÃO FINANCEIRA
-
-O sistema não deverá depender exclusivamente das notificações automáticas.
-
-Deverá existir processo de reconciliação capaz de consultar pagamentos que permaneçam em situações como:
-
-- PENDENTE
-- AGUARDANDO
-
-Isso será utilizado para identificar situações em que:
-
-- Uma notificação não chegou
-- Uma notificação falhou
-- Houve indisponibilidade temporária
-- É necessária conferência administrativa
-
-# 22. CANCELAMENTO DE PAGAMENTO
-
-Quando permitido pelas regras do PagBank e pela situação da cobrança, deverá existir possibilidade de cancelamento.
-
-O sistema deverá registrar:
-
-- Pagamento
-- Valor
-- Data
-- Motivo
-- Responsável
-- Resultado da operação
-
-O cancelamento financeiro deverá refletir corretamente na inscrição conforme sua situação.
-
-# 23. ESTORNO
-
-Pagamentos poderão ser estornados quando permitido.
-
-Deverão ser registrados:
-
-- Valor original
-- Valor estornado
-- Data
-- Motivo
-- Responsável
-- Identificação da operação
-
-O sistema deverá preservar o histórico financeiro.
-
-Não apagar pagamentos estornados.
-
-# 24. CORTESIAS
-
-O sistema deverá permitir inscrições sem cobrança em eventos normalmente pagos.
-
-Uma cortesia poderá resultar em:
-
-Valor final = R$ 0,00
-
-A inscrição poderá ser confirmada sem pagamento.
-
-A concessão da cortesia deverá permanecer registrada.
-
-# 25. CUPONS
-
-Eventos pagos poderão aceitar cupons.
-
-Tipos mínimos:
-
-- PERCENTUAL
-- VALOR_FIXO
-- CORTESIA
-
-Cada cupom poderá possuir:
-
-- Código
-- Evento
-- Tipo
-- Valor
-- Quantidade máxima de utilizações
-- Quantidade utilizada
-- Data inicial
-- Data final
-- Situação
-
-Um cupom não poderá ser utilizado fora de suas condições de validade.
-
-O valor final da inscrição nunca poderá ficar negativo.
-
-# 26. LISTA DE ESPERA
-
-Quando a capacidade do evento for atingida, poderá ser disponibilizada lista de espera.
-
-Participantes em lista de espera deverão possuir status:
-
-LISTA_ESPERA
-
-Eles não deverão ocupar uma vaga confirmada.
-
-Caso uma vaga seja liberada, a pessoa poderá ser promovida conforme as regras definidas para o evento.
-
-Inicialmente esse processo poderá ser realizado manualmente.
-
-O sistema deverá estar preparado para futura automatização.
-
-# 27. CANCELAMENTO DE INSCRIÇÃO
-
-Uma inscrição poderá ser cancelada conforme regras do evento.
-
-Quando uma inscrição confirmada for cancelada:
-
-- A vaga deverá ser liberada quando aplicável.
-- A situação financeira deverá ser avaliada.
-- Poderá ser necessário realizar estorno.
-- O histórico deverá ser preservado.
-- A lista de espera poderá ser utilizada.
-
-Cancelamento de inscrição e cancelamento financeiro são operações relacionadas, mas não deverão ser tratadas como a mesma ação.
-
-# 28. QR CODE DO PARTICIPANTE
-
-Após a confirmação da inscrição, o participante poderá receber um QR Code único para identificação.
-
-O QR Code deverá representar uma credencial segura e única.
-
-Não deverá expor simplesmente um número sequencial interno.
-
-O QR Code será utilizado principalmente no processo de check-in.
-
-# 29. CHECK-IN
-
-Somente inscrições válidas deverão poder realizar check-in.
-
-No momento do check-in, o sistema deverá verificar:
-
-- Participante
-- Evento
-- Situação da inscrição
-- Validade da credencial
-- Existência de check-in anterior
-
-O sistema deverá impedir check-in duplicado, salvo operação administrativa específica e registrada.
-
-Deverão ser registrados pelo menos:
-
-- Inscrição
-- Data
-- Hora
-- Responsável pelo check-in
-
-# 30. CERTIFICADOS
-
-Um evento poderá ou não emitir certificado.
-
-Quando emitir, poderá possuir:
-
-- Carga horária
-- Texto específico
-- Modelo
-- Regras de elegibilidade
-
-Por padrão, poderá ser exigido que o participante tenha presença confirmada.
-
-O certificado deverá possuir código único de validação.
-
-Também poderá possuir QR Code para validação.
-
-O sistema deverá permitir consultar a autenticidade de um certificado.
-
-# 31. PALESTRANTES E PROGRAMAÇÃO
-
-Um evento poderá possuir um ou vários palestrantes.
-
-Também poderá possuir programação composta por diferentes atividades.
-
-Uma programação poderá possuir informações como:
-
-- Horário
-- Título
-- Descrição
-- Palestrante
-- Local/sala
-
-Essas informações deverão permanecer associadas ao evento.
-
-# 32. ÁREA DO PARTICIPANTE
-
-O participante deverá conseguir consultar seu histórico relacionado aos eventos.
-
-Informações mínimas:
-
-- Eventos nos quais se inscreveu
-- Situação das inscrições
-- Pagamentos
-- Credenciais/QR Codes
-- Certificados disponíveis
-
-Uma pessoa poderá possuir várias inscrições em eventos distintos dentro do mesmo histórico.
-
-# 33. RELATÓRIOS
-
-O sistema deverá permitir obter informações como:
-
-- Inscritos por evento
-- Inscrições confirmadas
-- Inscrições pendentes
-- Lista de espera
-- Pagamentos recebidos
-- Pagamentos pendentes
-- Receita por evento
-- Participantes presentes
-- Participantes ausentes
-- Inscrições por município
-- Inscrições por empresa
-- Inscrições por cargo
-- Taxa de comparecimento
-- Histórico do participante
-
-Os relatórios deverão respeitar as informações efetivamente coletadas pelo formulário de cada evento.
-
-# 34. INDICADORES
-
-O sistema deverá disponibilizar dados que permitam acompanhar pelo menos:
-
-- Quantidade de eventos
-- Próximos eventos
-- Total de inscritos
-- Inscrições confirmadas
-- Vagas restantes
-- Pagamentos pendentes
-- Receita prevista
-- Receita recebida
-- Quantidade de presentes
-- Taxa de comparecimento
-
-As regras visuais de apresentação desses indicadores estão definidas nos documentos específicos de interface.
-
-# 35. USUÁRIOS E PERMISSÕES
-
-O sistema deverá diferenciar usuários internos conforme suas responsabilidades.
-
-Perfis inicialmente previstos:
-
-- ADMINISTRADOR
-- GERENTE_EVENTO
-- FINANCEIRO
-- ATENDIMENTO
-- CHECKIN
-- CONSULTA
-
-As permissões deverão permitir restringir ações específicas.
-
-Exemplos:
-
-- Criar evento
-- Editar evento
-- Cancelar evento
-- Visualizar participante
-- Alterar participante
-- Visualizar pagamento
-- Realizar estorno
-- Realizar check-in
-- Consultar relatórios
-
-Usuários não deverão possuir acesso a funcionalidades além de suas permissões.
-
-# 36. AUDITORIA
-
-Operações administrativas importantes deverão possuir histórico.
-
-Exemplos:
-
-- Criação e alteração de evento
-- Cancelamento de evento
-- Cancelamento de inscrição
-- Alteração manual de inscrição
-- Alteração manual de pagamento
-- Cortesia
-- Cancelamento financeiro
-- Estorno
-- Check-in
-- Alteração de presença
-- Emissão de certificado
-- Alteração de permissões
-
-O histórico deverá permitir identificar:
-
-- Quem realizou
-- Quando realizou
-- Qual operação foi realizada
-- Registro afetado
-- Valores anteriores e posteriores, quando aplicável
-
-# 37. LGPD E CONSENTIMENTOS
-
-O tratamento de dados pessoais deverá observar os princípios aplicáveis da LGPD.
-
-Os consentimentos deverão ser armazenados de maneira separada e identificável.
-
-Exemplos:
-
-- Termos de uso
-- Política de privacidade
-- Comunicação de marketing
-
-O aceite de marketing não deverá ser condição obrigatória para inscrição em um evento quando não houver justificativa legal para isso.
-
-Deverá ser possível identificar:
-
-- Tipo do consentimento
-- Versão apresentada
-- Se foi aceito
-- Data e hora do aceite
-
-O sistema deverá estar preparado para processos relacionados a:
-
-- Consulta de dados
-- Exportação
-- Correção
-- Anonimização
-- Exclusão, quando aplicável
-
-# 38. COMUNICAÇÕES
-
-O sistema deverá permitir comunicações relacionadas ao ciclo do evento.
-
-Situações que poderão gerar comunicação:
-
-- Inscrição realizada
-- Pagamento pendente
-- Pagamento confirmado
-- Pagamento recusado
-- Inscrição confirmada
-- Alteração importante no evento
-- Evento próximo
-- Evento cancelado
-- Certificado disponível
-
-Os canais poderão incluir:
-
-- E-mail
-- WhatsApp
-
-As definições técnicas das integrações de comunicação estão fora do escopo deste documento.
-
-# 39. EXPIRAÇÕES AUTOMÁTICAS
-
-O sistema deverá tratar automaticamente situações que possuem prazo.
-
-Exemplos:
-
-- Reserva de vaga expirada
-- PIX expirado
-- Boleto vencido
-- Prazo de inscrição encerrado
-- Lote encerrado
-- Inscrição pendente além do tempo permitido
-
-Essas alterações deverão obedecer às regras do evento e não poderão causar inconsistência na quantidade de vagas.
-
-# 40. HISTÓRICO FINANCEIRO
-
-Nenhuma operação financeira relevante deverá simplesmente substituir o histórico anterior.
-
-Deverá ser possível compreender a sequência:
-
-Cobrança criada  
-↓  
-Pagamento pendente  
-↓  
-Pagamento aprovado  
-↓  
-Eventual cancelamento  
-↓  
-Eventual estorno
-
-O histórico deverá permanecer disponível para conferência.
-
-# 41. HISTÓRICO DO PARTICIPANTE
-
-Deverá ser possível visualizar a relação histórica de um participante com os eventos.
-
-Exemplo:
-
-Participante: João da Silva
-
-- Reforma Tributária 2026 — presente
-- Treinamento eSocial 2026 — presente
-- Congresso Municipal 2027 — inscrito
-- Seminário Contábil 2027 — cancelado
-
-Esse histórico não deverá depender da duplicação dos dados do participante.
-
-# 42. EXEMPLO DE FLUXO COMPLETO
-
-Considere o seguinte cenário como referência de funcionamento.
-
-Evento:
-
-Seminário sobre Reforma Tributária 2026
-
-Data:
-
-20/11/2026
-
-Capacidade:
-
-200 participantes
-
-Lotes:
-
-1º lote — R$ 150,00
-
-2º lote — R$ 200,00
-
-Formas de pagamento:
-
-- PIX
-- Cartão
-- Boleto
-
-O participante acessa o evento.
-
-Preenche o formulário.
-
-O sistema:
-
-1. Valida os dados.
-2. Verifica disponibilidade.
-3. Identifica o lote vigente.
-4. Calcula o valor.
-5. Cria a inscrição.
-6. Aguarda escolha do pagamento.
-
-O participante seleciona PIX.
-
-O sistema cria a cobrança no PagBank.
-
-A inscrição permanece:
-
-AGUARDANDO_PAGAMENTO
-
-Após o PagBank confirmar o pagamento:
-
-Pagamento = PAGO
-
-Inscrição = CONFIRMADA
-
-O participante passa a ter sua credencial/QR Code disponível.
-
-No dia do evento:
-
-O QR Code é utilizado no check-in.
-
-O sistema registra a presença.
-
-Após o evento:
-
-Caso cumpra as regras definidas, o certificado é disponibilizado.
-
-# 43. REGRAS DE CONSISTÊNCIA
-
-Durante toda a implementação, preservar as seguintes regras:
-
-- Uma inscrição não deverá existir sem evento.
-- Uma inscrição deverá estar relacionada a um participante.
-- Uma inscrição paga não deverá ser confirmada sem pagamento válido, cortesia ou ação administrativa autorizada.
-- Não ultrapassar capacidade do evento.
-- Não duplicar check-in.
-- Não processar duas vezes a mesma confirmação financeira.
-- Não perder histórico financeiro.
-- Não perder respostas antigas após alteração do formulário.
-- Não armazenar informações sensíveis de cartão indevidamente.
-- Não permitir utilização inválida de cupom.
-- Não permitir lote encerrado em nova inscrição.
-- Não permitir inscrição pública fora do período definido.
-- Não permitir certificado quando as regras de elegibilidade não forem atendidas.
-- Toda alteração administrativa sensível deverá possuir rastreabilidade.
-
-# 44. ORIENTAÇÃO PARA IMPLEMENTAÇÃO
-
-Ao implementar uma funcionalidade, primeiro identifique quais regras deste documento se aplicam.
-
-Não crie regras novas simplesmente para facilitar a implementação.
-
-Quando uma decisão não estiver definida neste documento:
-
-1. Verifique os demais documentos do projeto.
-2. Verifique se a decisão é técnica, visual ou de negócio.
-3. Se for técnica, siga a documentação técnica.
-4. Se for visual, siga a documentação de interface.
-5. Se for uma nova regra de negócio relevante e não documentada, sinalize explicitamente a necessidade de definição antes de assumir um comportamento definitivo.
-
-As regras deste documento deverão ser tratadas como referência funcional do sistema.
-
-# 45. PAGBANK
-
-Sempre que uma funcionalidade depender do comportamento externo do PagBank/PagSeguro, consulte a documentação oficial atual.
-
-Não presuma que endpoints, status, campos, autenticação, regras de PIX, boleto, cartão, cancelamento, estorno ou notificações permanecem iguais a versões anteriores da API.
-
-A documentação oficial deverá definir COMO a integração é realizada.
-
-Este documento define COMO o sistema deverá se comportar do ponto de vista das regras de negócio.
-
-# 46. PRINCÍPIO GERAL
-
-O sistema deverá preservar a rastreabilidade completa do ciclo:
-
-EVENTO  
-↓  
-PARTICIPANTE  
-↓  
-INSCRIÇÃO  
-↓  
-PAGAMENTO, quando aplicável  
-↓  
-CONFIRMAÇÃO  
-↓  
-CHECK-IN  
-↓  
-PRESENÇA  
-↓  
-CERTIFICADO
-
-Cada etapa deverá manter seu próprio histórico e relacionamento com as demais, permitindo acompanhar todo o ciclo de participação de uma pessoa em um evento.
+# Regras de Negócio — RaroTickets
+
+> **AVISO OBRIGATÓRIO PARA AGENTES DE DESENVOLVIMENTO:**  
+> Este documento trata **EXCLUSIVAMENTE das regras de negócio do sistema**.  
+> As decisões de arquitetura de software, padrões de código e camadas estão definidas em [ARCHITECTURE.md](ARCHITECTURE.md).  
+> Os padrões de interface visual, tokens e layout estão definidos em [design-system.md](design-system.md).  
+> As diretrizes de autenticação, SSO e sessões estão definidas em [authentication.md](authentication.md).  
+> Não altere decisões técnicas ou visuais com base neste documento. Em caso de conflito, este documento é a fonte da verdade para **regras de negócio**.
+
+---
+
+## Sumário
+
+1. [Princípios e Bounded Contexts](#1-princípios-e-bounded-contexts)
+2. [Contexto 1: Gestão de Eventos e Lotes (`events`)](#2-contexto-1-gestão-de-eventos-e-lotes-events)
+   - [2.1 Informações e Configurações do Evento](#21-informações-e-configurações-do-evento)
+   - [2.2 Ciclo de Vida e Máquina de Estados do Evento](#22-ciclo-de-vida-e-máquina-de-estados-do-evento)
+   - [2.3 Lotes e Precificação Dinâmica](#23-lotes-e-precificação-dinâmica)
+   - [2.4 Programação e Palestrantes](#24-programação-e-palestrantes)
+3. [Contexto 2: Inscrições, Vagas e Participantes (`registrations`)](#3-contexto-2-inscrições-vagas-e-participantes-registrations)
+   - [3.1 Cadastro do Participante](#31-cadastro-do-participante)
+   - [3.2 Formulário Dinâmico e Snapshot de Respostas](#32-formulário-dinâmico-e-snapshot-de-respostas)
+   - [3.3 Controle de Capacidade e Reserva Temporária de Vagas](#33-controle-de-capacidade-e-reserva-temporária-de-vagas)
+   - [3.4 Ciclo de Vida e Máquina de Estados da Inscrição](#34-ciclo-de-vida-e-máquina-de-estados-da-inscrição)
+   - [3.5 Lista de Espera](#35-lista-de-espera)
+4. [Contexto 3: Pagamentos com Checkout Hospedado/Modal (`payments`)](#4-contexto-3-pagamentos-com-checkout-hospedado-modal-payments)
+   - [4.1 Modelo de Checkout Desacoplado (Hosted Checkout / Modal)](#41-modelo-de-checkout-desacoplado-hosted-checkout--modal)
+   - [4.2 Referência Unívoca e Ciclo do Pagamento](#42-referência-unívoca-e-ciclo-do-pagamento)
+   - [4.3 Tabela De-Para de Status do Provedor de Pagamento](#43-tabela-de-para-de-status-do-provedor-de-pagamento)
+   - [4.4 Idempotência, Webhooks e Reconciliação](#44-idempotência-webhooks-e-reconciliação)
+   - [4.5 Cupons e Cortesias](#45-cupons-e-cortesias)
+   - [4.6 Cancelamentos Financeiros e Estornos](#46-cancelamentos-financeiros-e-estornos)
+5. [Contexto 4: Acreditação, Check-in e Presença (`checkin`)](#5-contexto-4-acreditação-check-in-e-presença-checkin)
+   - [5.1 Credencial e QR Code](#51-credencial-e-qr-code)
+   - [5.2 Regras de Check-in e Validação](#52-regras-de-check-in-e-validação)
+6. [Contexto 5: Certificação (`certificates`)](#6-contexto-5-certificação-certificates)
+   - [6.1 Elegibilidade e Emissão](#61-elegibilidade-e-emissão)
+   - [6.2 Autenticidade e Consulta Pública](#62-autenticidade-e-consulta-pública)
+7. [Contexto 6: Acessos, Auditoria e LGPD (`compliance`)](#7-contexto-6-acessos-auditoria-e-lgpd-compliance)
+   - [7.1 Perfis de Acesso e Permissões (RaroNexus)](#71-perfis-de-acesso-e-permissões-raronexus)
+   - [7.2 Trilha de Auditoria Obrigatória](#72-trilha-de-auditoria-obrigatória)
+   - [7.3 LGPD e Gestão de Consentimentos](#73-lgpd-e-gestão-de-consentimentos)
+8. [Contexto 7: Notificações e Rotinas Automáticas (`jobs`)](#8-contexto-7-notificações-e-rotinas-automáticas-jobs)
+   - [8.1 Disparos de Comunicação](#81-disparos-de-comunicação)
+   - [8.2 Rotinas de Expiração Automática](#82-rotinas-de-expiração-automática)
+9. [Contexto 8: Consultas, Relatórios e Métricas](#9-contexto-8-consultas-relatórios-e-métricas)
+   - [9.1 Área do Participante](#91-área-do-participante)
+   - [9.2 Relatórios e Indicadores Operacionais](#92-relatórios-e-indicadores-operacionais)
+10. [Apêndice: Matriz de Invariantes e Cenários BDD Críticos](#10-apêndice-matriz-de-invariantes-e-cenários-bdd-críticos)
+
+---
+
+## 1. Princípios e Bounded Contexts
+
+O **RaroTickets** é um ecossistema de gestão de eventos corporativos, treinamentos e congressos públicos ou privados.
+
+### 1.1 Princípios de Domínio
+1. **Rastreabilidade Ponta a Ponta**: Toda ação que altera estado do evento, participante, vaga ou financeiro deve ser imutável e auditável.
+2. **Desacoplamento de Dados Sensíveis de Pagamento**: O sistema **não** coleta, valida ou armazena números de cartão de crédito, CVV ou códigos bancários internos. Todo o pagamento é delegado a um provedor em modal ou página segura (Hosted Checkout).
+3. **Idempotência**: Nenhuma ação disparada externamente (notificações de provedores de pagamento, múltiplos cliques do usuário) pode provocar duplicação de dados, cobranças repetidas ou corrupção de vagas.
+4. **Isomorfismo e Validações de Domínio**: Regras de negócio vivem no Domínio e utilizam o *Result Pattern* para tratamento de falhas previsíveis.
+
+```mermaid
+graph LR
+    A[events] --> B[registrations]
+    B --> C[payments]
+    B --> D[checkin]
+    D --> E[certificates]
+    F[compliance] -. auditoria .-> A
+    F -. auditoria .-> B
+    F -. auditoria .-> C
+    F -. auditoria .-> D
+```
+
+---
+
+## 2. Contexto 1: Gestão de Eventos e Lotes (`events`)
+
+### 2.1 Informações e Configurações do Evento
+- **RN-EVT-01 (Dados Obrigatórios)**: Todo evento deve possuir título, descrição, período (data/hora de início e término), modalidade (presencial ou online), responsável, tipo financeiro (`GRATUITO` ou `PAGO`) e status inicial.
+- **RN-EVT-02 (Localização)**: Eventos presenciais devem obrigatoriamente possuir endereço, município e UF. Eventos online devem possuir link de transmissão (visível aos participantes apenas após confirmação da inscrição).
+- **RN-EVT-03 (Período Válido)**: A data de término deve ser posterior ou igual à data de início:
+  $$\text{DataTermino} \ge \text{DataInicio}$$
+
+### 2.2 Ciclo de Vida e Máquina de Estados do Evento
+
+```mermaid
+stateDiagram-v2
+    [*] --> RASCUNHO : Criar Evento
+    RASCUNHO --> AGENDADO : Publicar data
+    AGENDADO --> INSCRICOES_ABERTAS : Início do período
+    RASCUNHO --> INSCRICOES_ABERTAS : Abertura direta
+    INSCRICOES_ABERTAS --> INSCRICOES_ENCERRADAS : Fim do período / Vagas esgotadas
+    INSCRICOES_ENCERRADAS --> INSCRICOES_ABERTAS : Reabertura administrativa
+    INSCRICOES_ENCERRADAS --> EM_ANDAMENTO : Chegada da data/hora início
+    EM_ANDAMENTO --> FINALIZADO : Término do evento
+    RASCUNHO --> CANCELADO : Cancelar
+    AGENDADO --> CANCELADO : Cancelar
+    INSCRICOES_ABERTAS --> CANCELADO : Cancelar
+    INSCRICOES_ENCERRADAS --> CANCELADO : Cancelar
+```
+
+| Status Origem | Transição Permitida | Gatilho / Condição |
+| :--- | :--- | :--- |
+| `RASCUNHO` | `AGENDADO` ou `INSCRICOES_ABERTAS` | Ação administrativa de publicação |
+| `AGENDADO` | `INSCRICOES_ABERTAS` | Chegada da data de abertura de inscrições |
+| `INSCRICOES_ABERTAS` | `INSCRICOES_ENCERRADAS` | Fim do prazo de inscrições ou esgotamento de vagas (sem lista de espera) |
+| `INSCRICOES_ENCERRADAS` | `EM_ANDAMENTO` | Início oficial da programação do evento |
+| `EM_ANDAMENTO` | `FINALIZADO` | Conclusão oficial do evento |
+| Qualquer estado pré-finalizado | `CANCELADO` | Ação administrativa de cancelamento (exige justificativa) |
+
+- **RN-EVT-04 (Bloqueio de Inscrições)**: Em `RASCUNHO`, `INSCRICOES_ENCERRADAS`, `EM_ANDAMENTO`, `FINALIZADO` e `CANCELADO`, é terminantemente proibida a criação pública de novas inscrições.
+
+### 2.3 Lotes e Precificação Dinâmica
+- **RN-LOT-01 (Estrutura de Lote)**: Eventos pagos possuem um ou mais lotes com: nome, valor nominal ($\text{Valor} > 0$), período de vigência (data início e término), quantidade máxima de vagas e indicador de ativo/inativo.
+- **RN-LOT-02 (Elegibilidade do Lote Vigente)**: O sistema identifica automaticamente o lote aplicável à inscrição considerando:
+  $$\text{LoteVigente} = \{ l \mid l.\text{ativo} = \text{true} \land (l.\text{inicio} \le \text{now}() \le l.\text{fim}) \land (l.\text{vagasRestantes} > 0) \}$$
+- **RN-LOT-03 (Transição Automática de Lote)**: Quando um lote encerra por data ou por esgotamento de suas vagas, o lote subsequente em ordem cronológica torna-se ativo imediatamente.
+- **RN-LOT-04 (Imutabilidade do Preço Contratado)**: O valor do lote vinculado a uma inscrição pendente ou confirmada é registrado como snapshot imutável. Alterações posteriores no preço do lote não retroagem sobre inscrições já criadas.
+
+### 2.4 Programação e Palestrantes
+- **RN-EVT-05 (Atividades)**: Um evento pode conter múltiplas atividades programadas, contendo: título, horário de início/término, descrição, local/sala e palestrantes vinculados.
+
+---
+
+## 3. Contexto 2: Inscrições, Vagas e Participantes (`registrations`)
+
+### 3.1 Cadastro do Participante
+- **RN-PAR-01 (Identidade Única)**: O participante possui cadastro próprio e desacoplado de eventos específicos, identificado unicamente por CPF (ou Passaporte para estrangeiros) e E-mail.
+- **RN-PAR-02 (Reutilização de Cadastro)**: Um participante pode se inscrever em múltiplos eventos sem duplicar seu cadastro base no sistema.
+
+### 3.2 Formulário Dinâmico e Snapshot de Respostas
+- **RN-FRM-01 (Formulário por Evento)**: Cada evento pode possuir campos customizados adicionais (ex.: Órgão público, cargo, necessidades especiais, arquivos anexos).
+- **RN-FRM-02 (Snapshot de Respostas)**: No momento em que a inscrição é submetida, as respostas fornecidas são congeladas em um snapshot imutável vinculado à inscrição. Modificações ou exclusões posteriores de campos no formulário do evento **não** alteram nem corrompem as respostas prévias.
+
+### 3.3 Controle de Capacidade e Reserva Temporária de Vagas
+- **RN-RES-01 (Fórmula de Capacidade)**: A quantidade de vagas disponíveis em um evento é calculada por:
+  $$\text{VagasDisponiveis} = \text{CapacidadeMaxima} - (\text{InscricoesConfirmadas} + \text{ReservasAtivas})$$
+- **RN-RES-02 (Invariante de Não-Superlotação)**: O sistema deve impedir que a concorrência entre solicitações simultâneas resulte em *overbooking*:
+  $$\text{VagasDisponiveis} \ge 0$$
+- **RN-RES-03 (Reserva Temporária de Vaga - Lock de Checkout)**: Ao submeter o formulário de um evento pago com vaga disponível, o sistema cria uma **reserva temporária de vaga** com validade de 15 minutos (`reserva_expira_em = now() + 15 min`).
+- **RN-RES-04 (Expiração de Reserva)**: Caso a confirmação de pagamento não seja recebida até `reserva_expira_em`, a reserva expira automaticamente, a vaga retorna imediatamente ao pool disponível e a inscrição transiciona para `CANCELADA` (motivo: `TIMEOUT_RESERVA`).
+- **RN-RES-05 (Concorrência Atômica)**: A alocação da vaga/reserva deve ocorrer com bloqueio transacional atômico no banco de dados para eliminar *race conditions*.
+
+### 3.4 Ciclo de Vida e Máquina de Estados da Inscrição
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDENTE : Submissão do formulário
+    PENDENTE --> CONFIRMADA : Evento gratuito / Cortesia 100%
+    PENDENTE --> AGUARDANDO_PAGAMENTO : Sessão de checkout aberta
+    PENDENTE --> CANCELADA : Timeout da reserva (15 min)
+    PENDENTE --> LISTA_ESPERA : Vagas esgotadas no momento do envio
+    AGUARDANDO_PAGAMENTO --> CONFIRMADA : Pagamento aprovado
+    AGUARDANDO_PAGAMENTO --> CANCELADA : Cobrança expirada / recusada
+    CONFIRMADA --> CANCELADA : Cancelamento administrativo ou solicitação
+    LISTA_ESPERA --> PENDENTE : Vaga liberada (promoção)
+```
+
+| Estado Origem | Gatilho / Evento | Estado Destino | Regra de Domínio |
+| :--- | :--- | :--- | :--- |
+| `PENDENTE` | Submissão em evento gratuito | `CONFIRMADA` | Confirmação imediata se houver vaga |
+| `PENDENTE` | Inicia checkout em evento pago | `AGUARDANDO_PAGAMENTO` | Reserva temporária ativa |
+| `PENDENTE` | Fim do tempo de reserva (15 min) | `CANCELADA` | Libera vaga de volta ao evento |
+| `AGUARDANDO_PAGAMENTO` | Notificação de pagamento aprovado | `CONFIRMADA` | Vaga torna-se definitivamente ocupada |
+| `AGUARDANDO_PAGAMENTO` | Cobrança expirada sem pagamento | `CANCELADA` | Libera vaga; permite nova tentativa |
+| `CONFIRMADA` | Solicitação formal de cancelamento | `CANCELADA` | Libera vaga; avalia eventual estorno |
+| `LISTA_ESPERA` | Promoção de vaga liberada | `PENDENTE` | Gera nova reserva temporária para o participante |
+
+- **RN-INS-01 (Código Identificador Único)**: Toda inscrição recebe um identificador único alfanumérico legível e seguro (ex.: `INS-2026-X89F2A`).
+
+### 3.5 Lista de Espera
+- **RN-ESP-01 (Ativação)**: Quando $\text{VagasDisponiveis} = 0$, inscrições públicas subsequentes podem ingressar na `LISTA_ESPERA` (se habilitada no evento).
+- **RN-ESP-02 (Não Ocupação de Vaga)**: Inscrições em `LISTA_ESPERA` não ocupam capacidade do evento nem geram cobrança financeira.
+- **RN-ESP-03 (Promoção)**: Quando uma vaga é liberada (por cancelamento ou expiração), o primeiro participante da lista de espera pode ser promovido para `PENDENTE`, recebendo notificação para concluir o pagamento em prazo delimitado.
+
+---
+
+## 4. Contexto 3: Pagamentos com Checkout Hospedado/Modal (`payments`)
+
+### 4.1 Modelo de Checkout Desacoplado (Hosted Checkout / Modal)
+- **RN-PAG-01 (Checkout em Modal / Hosted Checkout)**: O sistema adota checkout hospedado/modal (como *Mercado Pago Checkout Pro* ou equivalente). Ao clicar em pagar, abre-se um modal seguro sobre a aplicação (ou redirecionamento seguro oficial do provedor).
+- **RN-PAG-02 (Zero Retenção de Dados Sensíveis)**: O sistema **nunca** coleta, processa ou armazena números de cartão de crédito, CVV ou dados bancários do participante. Toda a transação ocorre dentro do ambiente certificado do provedor.
+- **RN-PAG-03 (Métodos Oferecidos pelo Modal)**: O modal do provedor oferece ao cliente:
+  - **PIX** (com QR Code dinâmico e código Copia e Cola gerados pelo provedor);
+  - **Cartão de Crédito** (com parcelamento configurado pelas regras do evento e análise de risco pelo provedor);
+  - **Boleto Bancário** (com vencimento gerido pelo provedor).
+
+### 4.2 Referência Unívoca e Ciclo do Pagamento
+- **RN-PAG-04 (Identificador Externo Unívoco)**: Toda sessão de cobrança criada no provedor deve receber o código único da inscrição no campo de referência externa:
+  $$\text{external\_reference} = \text{inscricaoId}$$
+- **RN-PAG-05 (Prevenção de Cobranças Duplicadas)**: Antes de abrir uma nova sessão de pagamento no provedor, o sistema verifica se já existe uma sessão aberta e válida para a mesma inscrição, reutilizando-a se estiver dentro da validade.
+
+### 4.3 Tabela De-Para de Status do Provedor de Pagamento
+Para manter a independência arquitetural, os retornos de status do provedor são obrigatoriamente convertidos para os status internos de domínio:
+
+| Status do Provedor (Ex: Mercado Pago / PagBank) | Status Interno do Pagamento | Efeito na Inscrição | Impacto na Vaga |
+| :--- | :--- | :--- | :--- |
+| `pending`, `in_process`, `authorized` | `AGUARDANDO` | Permanece `AGUARDANDO_PAGAMENTO` | Reserva mantida |
+| `approved`, `paid` | `PAGO` | Transiciona para `CONFIRMADA` | Vaga definitiva |
+| `rejected`, `declined` | `RECUSADO` | Permanece `AGUARDANDO_PAGAMENTO` (permite retry) | Reserva mantida até timeout |
+| `cancelled` | `CANCELADO` | Transiciona para `CANCELADA` | Libera vaga |
+| `expired` | `EXPIRADO` | Transiciona para `CANCELADA` | Libera vaga |
+| `refunded`, `charged_back` | `ESTORNADO` | Mantém registro; avalia cancelamento de inscrição | Libera vaga se cancelada |
+
+### 4.4 Idempotência, Webhooks e Reconciliação
+- **RN-PAG-06 (Idempotência Estrita no Webhook)**: O endpoint que recebe notificações assíncronas do provedor deve ser idempotente. Processar o mesmo webhook repetidas vezes não pode duplicar confirmações, enviar emails redundantes ou corromper o estado financeiro.
+- **RN-PAG-07 (Armazenamento de Notificações)**: Toda notificação recebida é armazenada integralmente (payload bruto, timestamp, assinatura) para auditoria e conferência.
+- **RN-PAG-08 (Reconciliação Financeira Ativa)**: O sistema não depende exclusivamente de webhooks. Uma rotina de reconciliação em background consulta proativamente o status de pagamentos em `AGUARDANDO` para tratar eventuais falhas de entrega de webhook.
+- **RN-PAG-09 (Tratamento de Pagamento Tardio)**: Se uma notificação de pagamento aprovado chegar após a expiração da reserva:
+  - Se ainda houver vagas disponíveis no evento: a inscrição é confirmada e a vaga é alocada.
+  - Se as vagas estiverem esgotadas: o sistema marca o pagamento como `ESTORNO_SOLICITADO` e notifica o time financeiro para reembolso automático, mantendo a inscrição em lista de espera ou cancelada.
+
+### 4.5 Cupons e Cortesias
+- **RN-PAG-10 (Tipos de Cupom)**: O sistema suporta cupons de desconto dos tipos:
+  - `PERCENTUAL` (desconto percentual sobre o valor do lote);
+  - `VALOR_FIXO` (abatimento em Reais);
+  - `CORTESIA` (100% de desconto).
+- **RN-PAG-11 (Invariante de Valor Final)**: O valor final a pagar nunca pode ser negativo:
+  $$\text{ValorFinal} = \max\left(0, \text{ValorLote} - \text{ValorDesconto}\right)$$
+- **RN-PAG-12 (Cortesias / Valor Zero)**: Quando $\text{ValorFinal} = 0$ (por cupom ou cortesia administrativa), a etapa de abertura de modal de pagamento é dispensada, confirmando-se a inscrição diretamente.
+
+### 4.6 Cancelamentos Financeiros e Estornos
+- **RN-PAG-13 (Separação de Operações)**: Cancelamento de inscrição e cancelamento financeiro/estorno são operações distintas e independentes.
+- **RN-PAG-14 (Imutabilidade de Registros Financeiros)**: Nenhum pagamento é apagado do banco de dados. Estornos e cancelamentos geram novos registros de evento financeiro com rastreabilidade de operador, valor e motivo.
+
+---
+
+## 5. Contexto 4: Acreditação, Check-in e Presença (`checkin`)
+
+### 5.1 Credencial e QR Code
+- **RN-CHK-01 (Emissão da Credencial)**: O participante só tem acesso à sua credencial/QR Code após a inscrição estar no status `CONFIRMADA`.
+- **RN-CHK-02 (Segurança do QR Code)**: O payload do QR Code não deve expor IDs sequenciais previsíveis do banco de dados. Deve conter um token opaco assinado (ex.: UUIDv4 ou token criptográfico com HMAC) validável no momento da leitura.
+
+### 5.2 Regras de Check-in e Validação
+- **RN-CHK-03 (Pré-condições para Check-in)**: O check-in só é validado se:
+  1. A inscrição estiver `CONFIRMADA`;
+  2. O evento estiver no status `EM_ANDAMENTO` ou no dia da realização;
+  3. Não existir check-in já registrado para aquela inscrição.
+- **RN-CHK-04 (Prevenção de Duplicidade)**: Leituras subsequentes do mesmo QR Code devem ser rejeitadas pelo sistema, exibindo alerta de *"Check-in já realizado"* com data, hora e responsável pela leitura original.
+- **RN-CHK-05 (Reentrada Administrativa)**: Em caso de necessidade operacional de reentrada, a liberação exige autorização de usuário com perfil adequado e registro de justificativa em auditoria.
+
+---
+
+## 6. Contexto 5: Certificação (`certificates`)
+
+### 6.1 Elegibilidade e Emissão
+- **RN-CRT-01 (Configuração do Certificado)**: O evento define se há emissão de certificado, carga horária associada, template e regras de presença mínima (ex.: presença confirmada no check-in).
+- **RN-CRT-02 (Invariante de Elegibilidade)**: Um certificado só pode ser emitido se o evento estiver `FINALIZADO` e o participante tiver sua presença devidamente confirmada no check-in.
+- **RN-CRT-03 (Imutabilidade do Certificado)**: Uma vez emitido, os dados do certificado (nome do participante, carga horária, data e título do evento) tornam-se imutáveis.
+
+### 6.2 Autenticidade e Consulta Pública
+- **RN-CRT-04 (Código Autenticador Único)**: Todo certificado emitido possui um código alfanumérico único de validação e um QR Code de verificação.
+- **RN-CRT-05 (Validação Pública)**: O sistema deve disponibilizar página pública onde qualquer terceiro pode digitar o código ou escanear o QR Code para comprovar a autenticidade e os dados do certificado emitido.
+
+---
+
+## 7. Contexto 6: Acessos, Auditoria e LGPD (`compliance`)
+
+### 7.1 Perfis de Acesso e Permissões (RaroNexus)
+Conforme definido em [authentication.md](authentication.md), o sistema autentica usuários via SSO no **RaroNexus**. O RaroTickets mapeia as roles retornadas para os perfis locais de autorização:
+
+| Perfil Interno | Responsabilidades / Permissões no RaroTickets |
+| :--- | :--- |
+| `ADMINISTRADOR` | Gestão total de eventos, configurações globais, cancelamentos e estornos |
+| `GERENTE_EVENTO`| Criação, edição e publicação de seus eventos; gestão de lotes e lista de espera |
+| `FINANCEIRO` | Visualização de relatórios financeiros, reconciliação e autorização de estornos |
+| `ATENDIMENTO` | Consulta de participantes, reenvio de comprovantes e cortesias autorizadas |
+| `CHECKIN` | Leitura de QR Codes e confirmação de presença na portaria do evento |
+| `CONSULTA` | Acesso somente-leitura a relatórios e métricas operacionais |
+
+### 7.2 Trilha de Auditoria Obrigatória
+- **RN-AUD-01 (Ações Rastreadas)**: Devem gerar registro de auditoria imutável:
+  - Criação, alteração de status ou cancelamento de eventos;
+  - Concessão manual de cortesias ou confirmação forçada de inscrições;
+  - Cancelamentos de inscrições e solicitações de estorno financeiro;
+  - Realização manual ou desbloqueio de check-in;
+  - Alterações de permissões e perfis de usuários.
+- **RN-AUD-02 (Dados Mínimos de Auditoria)**: O registro de auditoria deve conter: `usuarioId`, `dataHoraUTC`, `ipOrigem`, `tipoAcao`, `entidadeAfetada`, `idRegistroAfetado`, `estadoAnterior` e `estadoNovo`.
+
+### 7.3 LGPD e Gestão de Consentimentos
+- **RN-LGP-01 (Termos e Consentimento)**: O formulário de inscrição deve apresentar de forma clara e granular o aceite aos Termos de Uso e Política de Privacidade.
+- **RN-LGP-02 (Não Condicionamento de Marketing)**: O consentimento para envio de comunicações de marketing/promocionais deve ser opt-in independente e **nunca** obrigatório para a conclusão da inscrição.
+- **RN-LGP-03 (Direitos do Titular)**: O sistema deve suportar rotinas de anonimização e exportação de dados pessoais mediante requisição formal, resguardando os dados estritamente necessários para obrigações fiscais e auditoria legal.
+
+---
+
+## 8. Contexto 7: Notificações e Rotinas Automáticas (`jobs`)
+
+### 8.1 Disparos de Comunicação
+- **RN-JOB-01 (Gatilhos Transacionais)**: O sistema dispara notificações automáticas (E-mail e/ou WhatsApp) nos seguintes eventos:
+  1. *Inscrição Criada (Aguardando Pagamento)*: instruções e link para o modal de pagamento;
+  2. *Inscrição Confirmada*: envio do comprovante e da credencial/QR Code;
+  3. *Pagamento Recusado / Expirado*: aviso e orientações para reabertura de checkout;
+  4. *Lembrete do Evento*: enviado 24h a 48h antes do início do evento;
+  5. *Certificado Disponível*: aviso após encerramento do evento com link para emissão.
+
+### 8.2 Rotinas de Expiração Automática
+- **RN-JOB-02 (Rotina de Expiração de Reservas)**: Job executado a cada minuto para identificar reservas temporárias com `reserva_expira_em < now()`, transicionando as inscrições pendentes para `CANCELADA` e devolvendo as vagas ao pool.
+- **RN-JOB-03 (Rotina de Virada de Lotes)**: Job executado periodicamente para ativar lotes que atingiram a data inicial e desativar lotes cuja data final expirou.
+
+---
+
+## 9. Contexto 8: Consultas, Relatórios e Métricas
+
+### 9.1 Área do Participante
+- **RN-USR-01 (Painel Pessoal)**: O participante autenticado pode consultar o histórico de todos os eventos em que se inscreveu, status de pagamento, links de transmissão de eventos online, credenciais/QR Codes de check-in e certificados emitidos.
+
+### 9.2 Relatórios e Indicadores Operacionais
+- **RN-REP-01 (Indicadores em Tempo Real)**:
+  - Total de inscritos (confirmados vs. pendentes vs. lista de espera);
+  - Vagas restantes em tempo real;
+  - Receita financeira prevista vs. receita efetivamente liquidada;
+  - Taxa de comparecimento ($\text{Presenca} / \text{Confirmados} \times 100$).
+- **RN-REP-02 (Segmentação)**: Relatórios operacionais agrupados por lote, município, empresa/órgão e canal de inscrição.
+
+---
+
+## 10. Apêndice: Matriz de Invariantes e Cenários BDD Críticos
+
+### 10.1 Resumo das Invariantes Matemáticas do Domínio
+
+| Invariante | Expressão Formal | Violação Resulta em |
+| :--- | :--- | :--- |
+| **Não Superlotação** | $\text{Confirmadas} + \text{ReservasAtivas} \le \text{CapacidadeMaxima}$ | `Result.fail(DomainError.create('RN-RES-02', 'Vagas esgotadas'))` |
+| **Preço Não Negativo** | $\text{PrecoFinal} = \max(0, \text{PrecoLote} - \text{Desconto}) \ge 0$ | `Result.fail(DomainError.create('RN-PAG-11', 'Valor inválido'))` |
+| **Check-in Único** | $\text{Count}(\text{CheckInsPorInscricao}) \le 1$ | `Result.fail(DomainError.create('RN-CHK-04', 'Check-in já realizado'))` |
+| **Elegibilidade Certificado** | $\text{EventoFinalizado} \land \text{CheckInRealizado} = \text{true}$ | `Result.fail(DomainError.create('RN-CRT-02', 'Participante não elegível'))` |
+
+### 10.2 Cenários BDD de Alta Concorrência
+
+#### Cenário: Concorrência simultânea na última vaga
+```gherkin
+Cenário: Duas pessoas tentam reservar a última vaga simultaneamente
+  Dado que o evento "Reforma Tributária" possui apenas 1 vaga restante
+  E nenhum participante possui reserva ativa no momento
+  Quando o Participante "A" e o Participante "B" submetem o formulário no mesmo milissegundo
+  Então uma das transações adquire o lock atômico e cria a reserva temporária de 15 minutos
+  E a outra transação recebe o erro "Vagas esgotadas para este evento"
+  E é oferecido ao segundo participante ingressar na LISTA_ESPERA
+```
+
+#### Cenário: Idempotência de notificação do Provedor de Pagamento
+```gherkin
+Cenário: Webhook de pagamento recebido em duplicidade
+  Dado que a inscrição "INS-100" está com status AGUARDANDO_PAGAMENTO
+  Quando o provedor envia o webhook de pagamento aprovado para a inscrição "INS-100"
+  Então o pagamento é marcado como PAGO e a inscrição transiciona para CONFIRMADA
+  E o QR Code de credencial é gerado
+  Quando o provedor reenvia a mesma notificação de pagamento aprovado 30 segundos depois
+  Então o sistema reconhece a notificação já processada
+  E responde HTTP 200 ao provedor
+  E nenhuma transação secundária ou e-mail duplicado é gerado
+```
