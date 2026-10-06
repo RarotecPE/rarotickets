@@ -59,12 +59,12 @@ export function ParticipantLoginPage() {
       <form className="participant-auth-form" onSubmit={submit} noValidate>
         <div className="form-field">
           <label htmlFor="participant-login-email">E-mail</label>
-          <input id="participant-login-email" type="email" autoComplete="email" value={values.email} onChange={handleEmailChange} aria-invalid={Boolean(errors.email)} />
+          <input id="participant-login-email" type="email" autoComplete="email" maxLength={254} value={values.email} onChange={handleEmailChange} aria-invalid={Boolean(errors.email)} />
           {errors.email && <span className="field-error">{errors.email}</span>}
         </div>
         <div className="form-field">
           <label htmlFor="participant-login-password">Senha</label>
-          <input id="participant-login-password" type="password" autoComplete="current-password" value={values.password} onChange={handlePasswordChange} aria-invalid={Boolean(errors.password)} />
+          <input id="participant-login-password" type="password" autoComplete="current-password" maxLength={128} value={values.password} onChange={handlePasswordChange} aria-invalid={Boolean(errors.password)} />
           {errors.password && <span className="field-error">{errors.password}</span>}
         </div>
         <button className="button button-primary participant-auth-submit" type="submit" disabled={isSubmitting}>

@@ -103,7 +103,7 @@ O cadastro valida os mesmos Value Objects no client e no server, normaliza e-mai
 | `GET /api/participants/auth/session` | Consulta a sessão própria, sem expor senha, hash ou CPF integral. |
 | `POST /api/participants/auth/logout` | Revoga a sessão local do participante. |
 
-**Limites importantes:** o adaptador atual grava nome, e-mail e CPF em texto no arquivo local `DATA_DIRECTORY/participants.json`; somente as senhas ficam protegidas por hash. Esse armazenamento é apenas para desenvolvimento/demonstração e não deve receber dados reais em produção. Antes de abrir o cadastro ao público, migre para armazenamento apropriado, estabeleça controles de acesso/criptografia, retenção e exclusão de dados conforme a LGPD, além de verificação de e-mail, recuperação de senha, proteção contra abuso e testes de sessão. O histórico da conta ainda não lista inscrições, pagamentos, credenciais/QR Codes ou certificados; esses fluxos permanecem pendentes.
+**Limites importantes:** o adaptador atual grava nome, e-mail e CPF em texto no arquivo local `DATA_DIRECTORY/participants.json`; somente as senhas ficam protegidas por hash. As sessões de participante ficam em memória e são encerradas ao reiniciar o servidor. Esse armazenamento é apenas para desenvolvimento/demonstração e não deve receber dados reais em produção. Antes de abrir o cadastro ao público, migre para armazenamento apropriado, estabeleça controles de acesso/criptografia, retenção e exclusão de dados conforme a LGPD, além de verificação de e-mail, recuperação de senha, proteção contra abuso e testes de sessão. O histórico da conta ainda não lista inscrições, pagamentos, credenciais/QR Codes ou certificados; esses fluxos permanecem pendentes.
 
 ## Escopo desta entrega e próximos passos
 

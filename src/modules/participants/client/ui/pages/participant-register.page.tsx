@@ -93,7 +93,7 @@ export function ParticipantRegisterPage() {
           <input id="participant-password-confirm" type="password" autoComplete="new-password" maxLength={128} value={values.confirmPassword} onChange={handlePasswordConfirmationChange} aria-invalid={Boolean(errors.confirmPassword)} />
           {errors.confirmPassword && <span className="field-error">{errors.confirmPassword}</span>}
         </div>
-        <p className="participant-privacy-note">Seu CPF será armazenado para identificar seu cadastro de participante e não será exibido integralmente na interface.</p>
+        <p className="participant-privacy-note">Seu CPF será usado para identificar seu cadastro. Na área da conta, ele aparecerá parcialmente mascarado.</p>
         <button className="button button-primary participant-auth-submit" type="submit" disabled={isSubmitting}>
           {isSubmitting ? <span className="spinner spinner-small" /> : <UserRoundPlus size={16} />}
           {isSubmitting ? 'Criando conta…' : 'Criar conta de participante'}
