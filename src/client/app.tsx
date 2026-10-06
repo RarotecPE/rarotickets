@@ -5,6 +5,10 @@ import { DashboardPage } from '../modules/dashboard/client/ui/pages/dashboard.pa
 import { ModulePlaceholderPage } from '../modules/dashboard/client/ui/pages/module-placeholder.page';
 import { LoginPage } from '../modules/auth/client/ui/pages/login.page';
 import { EventsPage } from '../modules/events/client/ui/pages/events.page';
+import { ParticipantAccountPage } from '../modules/participants/client/ui/pages/participant-account.page';
+import { ParticipantLoginPage } from '../modules/participants/client/ui/pages/participant-login.page';
+import { ParticipantRegisterPage } from '../modules/participants/client/ui/pages/participant-register.page';
+import { useParticipantAuth } from '../modules/participants/client/state/participant-auth-context';
 import { useAuth } from '../modules/auth/client/state/auth-context';
 import type { ApplicationPermission } from '../modules/auth/domain/value-objects/application-role.vo';
 
@@ -12,6 +16,11 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/account/login" element={<ParticipantLoginPage />} />
+      <Route path="/account/register" element={<ParticipantRegisterPage />} />
+      <Route element={<RequireParticipantAuthenticated />}>
+        <Route path="/account" element={<ParticipantAccountPage />} />
+      </Route>
       <Route element={<RequireAuthenticated />}>
         <Route element={<AppShell />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
@@ -41,6 +50,19 @@ function RequireAuthenticated() {
   }
   if (auth.status === 'forbidden') {
     return <FullPageState title="Acesso não autorizado" description="Seu perfil no RaroNexus não possui uma função habilitada no RaroTickets." action={<a className="button button-quiet" href="/api/auth/logout" onClick={(event) => { event.preventDefault(); void auth.logout(); }}>Encerrar sessão</a>} />;
+  }
+  return <Outlet />;
+}
+
+function RequireParticipantAuthenticated() {
+  const auth = useParticipantAuth();
+  const location = useLocation();
+  if (auth.status === 'loading') return <FullPageState title="Conferindo sua conta" description="Só um instante." />;
+  if (auth.status === 'unavailable') {
+    return <FullPageState title="Não foi possível carregar sua conta" description="Verifique sua conexão e tente novamente." action={<button className="button button-primary" type="button" onClick={() => void auth.refreshSession()}>Tentar novamente</button>} />;
+  }
+  if (auth.status === 'unauthenticated') {
+    return <Navigate to="/account/login" replace state={{ from: location.pathname }} />;
   }
   return <Outlet />;
 }

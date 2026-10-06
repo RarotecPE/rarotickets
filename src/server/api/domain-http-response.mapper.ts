@@ -13,7 +13,8 @@ export function mapDomainErrorToHttpResponse(params: MapDomainErrorParams): Http
 function resolveStatusCode(code: string): number {
   if (code.endsWith('_NOT_FOUND')) return 404;
   if (code === 'UNKNOWN_APPLICATION_ROLE') return 403;
-  if (code === 'INACTIVE_GLOBAL_SESSION') return 401;
+  if (code === 'INACTIVE_GLOBAL_SESSION' || code === 'INVALID_PARTICIPANT_CREDENTIALS') return 401;
+  if (code === 'PARTICIPANT_ALREADY_REGISTERED') return 409;
   if (code === 'INVALID_GLOBAL_IDENTITY') return 502;
   if (code === 'INTERNAL_ERROR') return 500;
   return 400;

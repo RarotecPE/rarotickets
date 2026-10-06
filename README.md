@@ -1,6 +1,6 @@
 # RaroTickets
 
-Sistema mobile-first para a operação de eventos Raro. A base atual inclui dashboard operacional, catálogo de eventos, criação de rascunhos, atualização de situação e autenticação SSO pelo RaroNexus. Inscrições, participantes, pagamentos, check-in e relatórios aparecem como áreas preparadas, mas ainda não são fluxos transacionais nesta versão.
+Sistema mobile-first para a operação de eventos Raro. A base atual inclui dashboard operacional, catálogo de eventos, criação de rascunhos, atualização de situação e autenticação SSO pelo RaroNexus para a equipe interna. Participantes têm cadastro e login próprios por e-mail e senha, independentes do RaroNexus. Inscrições em eventos, pagamentos, check-in e relatórios aparecem como áreas preparadas, mas ainda não são fluxos transacionais nesta versão.
 
 ## Stack e arquitetura
 
@@ -8,7 +8,7 @@ Sistema mobile-first para a operação de eventos Raro. A base atual inclui dash
 - Clean Architecture/DDD: `@core`, `modules/*/domain`, `application`, `server` e `client` separados.
 - Value Objects compartilhados entre validação de formulário e regras server-side; casos de uso retornam `Result`.
 - O client conversa somente com a API local. Credenciais SSO e tokens ficam no server.
-- API local: JSON em arquivo, gravado atomicamente em `DATA_DIRECTORY/events.json`. É um adaptador simples para desenvolvimento; antes de operar em produção ou em múltiplas instâncias, substitua-o por banco transacional e implemente as proteções de concorrência/auditoria adequadas.
+- API local: eventos e contas de participantes são persistidos em arquivos JSON dentro de `DATA_DIRECTORY` (`events.json` e `participants.json`), gravados atomicamente. É um adaptador simples para desenvolvimento; antes de operar em produção ou em múltiplas instâncias, substitua-o por banco transacional e implemente as proteções de concorrência, privacidade e auditoria adequadas.
 
 ## Desenvolvimento local
 
@@ -87,11 +87,29 @@ As chaves abaixo são mapeadas para permissões do RaroTickets, conforme os perf
 
 A verificação de permissão ocorre no server em cada operação protegida; ocultar uma ação na interface não é a barreira de segurança.
 
+## Conta de participante (sem RaroNexus)
+
+A autenticação da equipe e a conta de participante são fluxos separados:
+
+- **Equipe interna:** entra em `/login` por meio do SSO RaroNexus. A criação e a operação de eventos continuam protegidas pelas permissões locais derivadas do perfil interno.
+- **Participantes e público:** acessam `/account/register`, informam nome, e-mail, CPF e senha e entram em `/account/login` com e-mail e senha. Não precisam de conta RaroNexus. O login não usa nem consulta as credenciais do SSO.
+
+O cadastro valida os mesmos Value Objects no client e no server, normaliza e-mail/CPF e não mostra o CPF integral na tela da conta. As senhas são derivadas com scrypt e salt aleatório; o servidor cria a sessão em um cookie HttpOnly separado (`rarotickets_participant_session`). O prazo dessa sessão é configurado independentemente pelo `PARTICIPANT_SESSION_COOKIE_MAX_AGE_SECONDS`. Os endpoints locais são:
+
+| Rota | Finalidade |
+| --- | --- |
+| `POST /api/participants/auth/register` | Cria a conta e inicia uma sessão de participante. |
+| `POST /api/participants/auth/login` | Autentica com e-mail e senha. |
+| `GET /api/participants/auth/session` | Consulta a sessão própria, sem expor senha, hash ou CPF integral. |
+| `POST /api/participants/auth/logout` | Revoga a sessão local do participante. |
+
+**Limites importantes:** o adaptador atual grava nome, e-mail e CPF em texto no arquivo local `DATA_DIRECTORY/participants.json`; somente as senhas ficam protegidas por hash. Esse armazenamento é apenas para desenvolvimento/demonstração e não deve receber dados reais em produção. Antes de abrir o cadastro ao público, migre para armazenamento apropriado, estabeleça controles de acesso/criptografia, retenção e exclusão de dados conforme a LGPD, além de verificação de e-mail, recuperação de senha, proteção contra abuso e testes de sessão. O histórico da conta ainda não lista inscrições, pagamentos, credenciais/QR Codes ou certificados; esses fluxos permanecem pendentes.
+
 ## Escopo desta entrega e próximos passos
 
-- **Pronto nesta base:** SSO RaroNexus (dependente de cadastro/credenciais externos), sessão HttpOnly, introspecção, autorização local, catálogo Aplicativos, atalhos para início/perfil do RaroNexus, dashboard mobile-first, criação/listagem de eventos e mudança de situação com permissão.
-- **Estrutura visual, ainda sem operações reais:** Inscrições, participantes, financeiro, check-in e relatórios. A interface informa explicitamente que essas áreas não processam dados ainda.
-- **Ainda necessário antes de produção:** credenciais e callback por ambiente; confirmação das chaves de perfil e do formato de sucesso de revogação no RaroNexus; banco transacional, auditoria e controle concorrente de vagas; fluxos de formulário/inscrição; integração PagBank baseada na documentação oficial vigente; check-in/QR code; LGPD e testes operacionais.
+- **Pronto nesta base:** SSO RaroNexus para equipe (dependente de cadastro/credenciais externos), sessão HttpOnly, introspecção, autorização local, catálogo Aplicativos, dashboard mobile-first, gestão básica de eventos e cadastro/login/conta de participante por e-mail e senha.
+- **Estrutura visual, ainda sem operações reais:** inscrições em eventos, gestão/lista de participantes, pagamentos, check-in e relatórios. O histórico na conta de participante também aguarda esses fluxos.
+- **Ainda necessário antes de produção:** credenciais e callback por ambiente; confirmação das chaves de perfil e do formato de sucesso de revogação no RaroNexus; banco transacional, proteção adequada dos dados pessoais, auditoria e controle concorrente de vagas; formulários/inscrições; integração PagBank baseada na documentação oficial vigente; check-in/QR code; recuperação e verificação de conta, LGPD e testes operacionais.
 
 Não considere o SSO validado ponta a ponta até testar com uma instância, callback, perfil e credenciais reais cadastrados pelo responsável pelo RaroNexus.
 

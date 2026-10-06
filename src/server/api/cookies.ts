@@ -13,7 +13,7 @@ export type ReadCookieParams = {
   cookieHeader: string | undefined;
   name: string;
 };
-export type WriteAuthCookieParams = { response: Response; config: AppConfig; name: string; value: string };
+export type WriteAuthCookieParams = { response: Response; config: AppConfig; name: string; value: string; maxAgeSeconds?: number };
 export type AuthCookieScopeParams = { response: Response; config: AppConfig };
 export type ClearAuthCookieParams = AuthCookieScopeParams & { name: string };
 
@@ -32,7 +32,7 @@ export function readCookie(params: ReadCookieParams): string | null {
 export function setSessionCookie(params: WriteAuthCookieParams): void {
   params.response.cookie(params.name, params.value, {
     ...baseCookieOptions(params.config),
-    maxAge: params.config.sessionCookieMaxAgeSeconds * 1000,
+    maxAge: (params.maxAgeSeconds ?? params.config.sessionCookieMaxAgeSeconds) * 1000,
   });
 }
 

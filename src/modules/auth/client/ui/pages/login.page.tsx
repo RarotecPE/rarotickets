@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight, CalendarDays, Check, CircleHelp, LockKeyhole, ShieldCheck, TicketCheck } from 'lucide-react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/auth-context';
 
 type SsoLoginMode = 'interactive' | 'silent';
@@ -121,6 +121,7 @@ export function LoginPage() {
           )}
 
           <div className="login-trust"><ShieldCheck size={16} /><span>Autenticação protegida pelo RaroNexus</span></div>
+          <p className="participant-portal-link">Vai participar de um evento? <Link to="/account/login">Acesse sua conta de participante</Link></p>
         </div>
         <p className="login-help">Precisa de ajuda? <a href="mailto:suporte@raro.com.br">Fale com o suporte</a></p>
       </section>

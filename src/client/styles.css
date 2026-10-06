@@ -745,3 +745,44 @@ button { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+.participant-auth-page { display: grid; min-height: 100vh; min-height: 100dvh; place-items: center; padding: 24px 16px; background: var(--app-background); }
+.participant-auth-card { width: min(100%, 470px); padding: 26px 20px; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 12px; box-shadow: var(--shadow-app-elevated); }
+.participant-auth-brand { display: inline-flex; margin-bottom: 28px; }
+.participant-auth-card > .eyebrow { margin-bottom: 7px; }
+.participant-auth-card h1 { margin: 0; color: var(--app-foreground); font-size: 24px; font-weight: 700; line-height: 1.25; }
+.participant-auth-description { margin: 9px 0 20px; color: var(--app-muted-foreground); font-size: 13px; line-height: 1.55; }
+.participant-auth-form { display: grid; gap: 15px; }
+.participant-auth-submit { width: 100%; min-height: 44px; justify-content: center; gap: 9px; margin-top: 3px; }
+.participant-auth-switch { margin: 18px 0 0; color: var(--app-muted-foreground); font-size: 12px; text-align: center; }
+.participant-auth-switch a, .participant-staff-link { color: #60a5fa; font-weight: 600; }
+.theme-light .participant-auth-switch a, .theme-light .participant-staff-link, .theme-light .participant-portal-link a { color: #1d4ed8; }
+.participant-staff-link { display: flex; min-height: 38px; align-items: center; justify-content: center; gap: 6px; padding-top: 12px; margin-top: 13px; border-top: 1px solid var(--app-border); font-size: 11px; text-align: center; }
+.participant-privacy-note { margin: 0; color: var(--app-muted-foreground); font-size: 10px; line-height: 1.5; }
+.participant-account-page { width: min(100% - 32px, 960px); min-height: 100vh; padding: 18px 0 40px; margin: 0 auto; }
+.participant-account-header { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--app-border); }
+.participant-account-header .brand-lockup { text-decoration: none; }
+.participant-account-intro { padding: 32px 0 22px; }
+.participant-account-intro h1 { margin: 7px 0 6px; color: var(--app-foreground); font-size: 26px; line-height: 1.2; }
+.participant-account-intro p { margin: 0; color: var(--app-muted-foreground); font-size: 13px; }
+.participant-profile-card, .participant-history-card { padding: 18px; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 10px; }
+.participant-profile-heading { display: flex; align-items: center; gap: 11px; padding-bottom: 15px; border-bottom: 1px solid var(--app-border); }
+.participant-profile-icon, .participant-history-icon { display: grid; width: 37px; height: 37px; flex: 0 0 auto; place-items: center; color: var(--app-primary); background: color-mix(in srgb, var(--app-primary) 12%, transparent); border-radius: 9px; }
+.participant-profile-heading h2, .participant-history-card h2 { margin: 0; color: var(--app-foreground); font-size: 15px; }
+.participant-profile-heading p { margin: 4px 0 0; color: var(--app-muted-foreground); font-size: 11px; }
+.participant-profile-details { display: grid; grid-template-columns: 1fr; gap: 14px; padding: 15px 0 0; margin: 0; }
+.participant-profile-details div { min-width: 0; }
+.participant-profile-details dt { margin-bottom: 4px; color: var(--app-muted-foreground); font-size: 10px; }
+.participant-profile-details dd { overflow-wrap: anywhere; margin: 0; color: var(--app-foreground); font-size: 12px; font-weight: 600; }
+.participant-history-card { display: grid; justify-items: start; gap: 9px; margin-top: 16px; }
+.participant-history-card p { max-width: 550px; margin: 0; color: var(--app-muted-foreground); font-size: 12px; line-height: 1.55; }
+.participant-history-status { display: inline-flex; align-items: center; gap: 7px; margin-top: 3px; color: var(--app-success); font-size: 10px; font-weight: 600; }
+.participant-history-status span { width: 7px; height: 7px; background: var(--app-success); border-radius: 50%; }
+
+@media (min-width: 600px) {
+  .participant-auth-card { padding: 34px; }
+  .participant-profile-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .participant-account-intro { padding-top: 42px; }
+}
+.participant-portal-link { margin: 13px 0 0; color: var(--app-muted-foreground); font-size: 11px; text-align: center; }
+.participant-portal-link a { color: #60a5fa; font-weight: 650; }

@@ -22,6 +22,18 @@ import { CreateEventController } from '../../modules/events/server/api/controlle
 import { ListEventsController } from '../../modules/events/server/api/controllers/list-events.controller';
 import { UpdateEventStatusController } from '../../modules/events/server/api/controllers/update-event-status.controller';
 import { createEventsRouter } from '../../modules/events/server/api/routes/events.routes';
+import { ParticipantMapper } from '../../modules/participants/application/mappers/participant.mapper';
+import { RegisterParticipantUseCase } from '../../modules/participants/application/use-cases/register-participant/register-participant.use-case';
+import { LoginParticipantUseCase } from '../../modules/participants/application/use-cases/login-participant/login-participant.use-case';
+import { GetParticipantAccountUseCase } from '../../modules/participants/application/use-cases/get-participant-account/get-participant-account.use-case';
+import { RegisterParticipantController } from '../../modules/participants/server/api/controllers/register-participant.controller';
+import { LoginParticipantController } from '../../modules/participants/server/api/controllers/login-participant.controller';
+import { GetParticipantAccountController } from '../../modules/participants/server/api/controllers/get-participant-account.controller';
+import { createParticipantAuthRouter } from '../../modules/participants/server/api/routes/participant-auth.routes';
+import { ParticipantSessionRegistry } from '../../modules/participants/server/infrastructure/session/participant-session.registry';
+import { ScryptParticipantPasswordHasher } from '../../modules/participants/server/infrastructure/providers/scrypt-participant-password-hasher.provider';
+import { ParticipantPersistenceMapper } from '../../modules/participants/server/infrastructure/persistence/mappers/participant-persistence.mapper';
+import { JsonParticipantRepositoryImpl } from '../../modules/participants/server/infrastructure/persistence/repositories/json-participant.repository.impl';
 import { EventPersistenceMapper } from '../../modules/events/server/infrastructure/persistence/mappers/event-persistence.mapper';
 import { JsonEventRepositoryImpl } from '../../modules/events/server/infrastructure/persistence/repositories/json-event.repository.impl';
 import { DEMO_EVENT_RECORDS } from '../../modules/events/server/infrastructure/persistence/seed-events';
@@ -58,6 +70,30 @@ export async function createApplication(params: CreateApplicationParams): Promis
   const listApplicationsController = new ListAuthorizedApplicationsController({ useCase: listApplicationsUseCase });
   const demoSessionRegistry = new DemoSessionRegistry({ mapper: authSessionMapper });
 
+  const participantMapper = new ParticipantMapper();
+  const participantPersistenceMapper = new ParticipantPersistenceMapper();
+  const participantRepository = new JsonParticipantRepositoryImpl({
+    filePath: join(config.dataDirectory, 'participants.json'),
+    mapper: participantPersistenceMapper,
+  });
+  await participantRepository.initialize();
+  const participantPasswordHasher = new ScryptParticipantPasswordHasher();
+  const participantSessionRegistry = new ParticipantSessionRegistry();
+  const registerParticipantUseCase = new RegisterParticipantUseCase({
+    participantRepository,
+    passwordHasher: participantPasswordHasher,
+    participantMapper,
+  });
+  const loginParticipantUseCase = new LoginParticipantUseCase({
+    participantRepository,
+    passwordHasher: participantPasswordHasher,
+    participantMapper,
+  });
+  const getParticipantAccountUseCase = new GetParticipantAccountUseCase({ participantRepository, participantMapper });
+  const registerParticipantController = new RegisterParticipantController({ useCase: registerParticipantUseCase });
+  const loginParticipantController = new LoginParticipantController({ useCase: loginParticipantUseCase });
+  const getParticipantAccountController = new GetParticipantAccountController({ useCase: getParticipantAccountUseCase });
+
   const eventMapper = new EventMapper();
   const eventPersistenceMapper = new EventPersistenceMapper();
   const eventRepository = new JsonEventRepositoryImpl({
@@ -81,6 +117,13 @@ export async function createApplication(params: CreateApplicationParams): Promis
     revokeSessionController,
     listApplicationsController,
     demoSessionRegistry,
+  }));
+  app.use('/api/participants/auth', createParticipantAuthRouter({
+    config,
+    registerParticipantController,
+    loginParticipantController,
+    getParticipantAccountController,
+    sessionRegistry: participantSessionRegistry,
   }));
   app.use('/api/events', createEventsRouter({
     config,

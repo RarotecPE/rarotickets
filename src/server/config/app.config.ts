@@ -11,6 +11,7 @@ export type AppConfig = {
   raronexus: RaroNexusSettings;
   raronexusRequestTimeoutMs: number;
   sessionCookieMaxAgeSeconds: number;
+  participantSessionCookieMaxAgeSeconds: number;
   cookieSecure: boolean;
   demoLoginEnabled: boolean;
   dataDirectory: string;
@@ -32,6 +33,7 @@ export function loadAppConfig(params: LoadAppConfigParams): AppConfig {
   const appBaseUrl = readOrigin({ value: environment.APP_BASE_URL, requireHttps: isProduction });
   const baseUrl = readOrigin({ value: environment.RARONEXUS_BASE_URL, requireHttps: isProduction });
   const maxAgeValue = readPositiveInteger({ value: environment.RARONEXUS_SESSION_COOKIE_MAX_AGE_SECONDS, fallback: 28800 });
+  const participantMaxAgeValue = readPositiveInteger({ value: environment.PARTICIPANT_SESSION_COOKIE_MAX_AGE_SECONDS, fallback: 28800 });
   const timeoutValue = readPositiveInteger({ value: environment.RARONEXUS_REQUEST_TIMEOUT_MS, fallback: 5000 });
 
   return {
@@ -43,6 +45,7 @@ export function loadAppConfig(params: LoadAppConfigParams): AppConfig {
     },
     raronexusRequestTimeoutMs: Math.min(timeoutValue, 30000),
     sessionCookieMaxAgeSeconds: Math.min(maxAgeValue, 604800),
+    participantSessionCookieMaxAgeSeconds: Math.min(participantMaxAgeValue, 604800),
     cookieSecure: isProduction,
     demoLoginEnabled: !isProduction && environment.DEMO_LOGIN_ENABLED === 'true',
     dataDirectory: resolve(params.workingDirectory, environment.DATA_DIRECTORY ?? '.data'),

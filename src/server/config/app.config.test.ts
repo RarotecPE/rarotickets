@@ -22,6 +22,7 @@ describe('loadAppConfig', () => {
     expect(config.demoLoginEnabled).toBe(true);
     expect(config.cookieSecure).toBe(false);
     expect(config.appBaseUrl).toBe('http://localhost:5173');
+    expect(config.participantSessionCookieMaxAgeSeconds).toBe(28800);
   });
 
   it('requires HTTPS and disables demonstration credentials in production', () => {
@@ -53,6 +54,7 @@ describe('loadAppConfig', () => {
         RARONEXUS_CLIENT_SECRET: 'server-secret',
         RARONEXUS_REQUEST_TIMEOUT_MS: '45000',
         RARONEXUS_SESSION_COOKIE_MAX_AGE_SECONDS: '999999',
+        PARTICIPANT_SESSION_COOKIE_MAX_AGE_SECONDS: '90000',
       },
     });
 
@@ -60,5 +62,6 @@ describe('loadAppConfig', () => {
     expect(config.appBaseUrl).toBe('https://tickets.example.com');
     expect(config.raronexusRequestTimeoutMs).toBe(30000);
     expect(config.sessionCookieMaxAgeSeconds).toBe(604800);
+    expect(config.participantSessionCookieMaxAgeSeconds).toBe(90000);
   });
 });
