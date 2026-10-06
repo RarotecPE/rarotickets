@@ -10,6 +10,7 @@ Você é um agente de IA trabalhando em um ecossistema de sistemas web full-stac
 | -------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | [agents/ARCHITECTURE.md](agents/ARCHITECTURE.md)   | Arquitetura completa: camadas, regras, padrões, exemplos | **SEMPRE** — antes de qualquer tarefa                                                       |
 | [agents/design-system.md](agents/design-system.md) | Layout, componentes, design tokens e padrões de UI       | Antes de tarefas de interface; leitura obrigatória junto aos demais documentos de `agents/` |
+| [agents/business-rules.md](agents/business-rules.md) | Regras de negócio do sistema de gerenciamento de eventos | Antes de implementar ou alterar funcionalidades e regras de negócio |
 
 > **Nota:** A pasta `agents/` pode receber novos documentos no futuro
 > (ex: `agents/testing.md`, `agents/deployment.md`, `agents/api-contracts.md`).
@@ -25,12 +26,13 @@ Você é um agente de IA trabalhando em um ecossistema de sistemas web full-stac
 6. **Sempre** utilize o Result Pattern ao invés de lançar exceptions para erros de domínio.
 7. **Sempre** reutilize Value Objects do domínio nas validações do client.
 8. **Sempre** consulte este arquivo e a pasta `agents/` no início de cada nova sessão.
+9. **Sempre** siga as regras de negócio documentadas em `agents/business-rules.md`; decisões de arquitetura e interface seguem os respectivos documentos.
 
 ## 🔄 Fluxo de Trabalho do Agente
 
 1. Receber tarefa
 2. Ler `AGENTS.md` (este arquivo)
-3. Verificar todos os documentos de `agents/` e lê-los na íntegra, incluindo [ARCHITECTURE.md](agents/ARCHITECTURE.md) e [design-system.md](agents/design-system.md)
+3. Verificar todos os documentos de `agents/` e lê-los na íntegra, incluindo [ARCHITECTURE.md](agents/ARCHITECTURE.md), [design-system.md](agents/design-system.md) e [business-rules.md](agents/business-rules.md)
 4. Identificar em qual camada/módulo a tarefa se encaixa
 5. Verificar regras de importação para aquela camada
 6. Implementar seguindo os padrões e exemplos
