@@ -101,6 +101,13 @@ Em Tailwind 4, o uso é opcional: mapeie as variáveis de cor em `@theme inline`
 - Transições de cor podem durar `150ms`. Evite mudanças de tamanho entre estados e reduza ou elimine animações quando `prefers-reduced-motion: reduce` estiver ativo.
 - O foco por teclado usa contorno sólido de `2px` em `--app-primary`, afastado `2px` do elemento. Não remova esse sinal sem substituí-lo por outro igualmente visível.
 
+## Menu superior e navegação
+
+- Crie um cabeçalho no topo da aplicação com a identidade do produto, o título da página atual e as ações da conta. Adapte a disposição desses elementos ao espaço disponível sem perder a identificação da página nem o acesso às ações.
+- Inclua no cabeçalho o botão **Aplicativos** para conectar os sistemas disponíveis à conta no RaroNexus. Ao acioná-lo, abra um menu com os sistemas autorizados; cada opção deve mostrar o nome do sistema e levar ao respectivo endereço. Esse menu reúne acessos entre sistemas e é separado da navegação interna do produto.
+- Use `--app-surface` no cabeçalho e no menu aberto, `--app-border` nas divisórias, `--app-foreground` no texto principal e `--app-muted-foreground` nos elementos secundários. Destaque a página ativa e as ações selecionadas com `--app-primary`. Garanta nomes acessíveis para os botões, foco visível e estados de abertura perceptíveis por teclado e leitor de tela.
+- No mobile, conte apenas os destinos da navegação principal do produto; os sistemas exibidos em **Aplicativos** não entram nessa contagem. Com **até 5 destinos**, pode ser mantido o padrão atual de navegação. Com **6 ou mais destinos**, use um botão hamburger à esquerda do cabeçalho para abrir a navegação principal em um menu lateral. Nesse caso, a navegação inferior deixa de apresentar esses destinos.
+
 ## Aplicação em outros produtos
 
 1. Incorpore a base CSS acima ou reproduza seus valores em tokens equivalentes na tecnologia escolhida.
