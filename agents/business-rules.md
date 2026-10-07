@@ -1,4 +1,8 @@
-# Regras de Negócio — RaroTickets
+# Geral
+Empresa: Rarotec
+Sistema: RaroTickets
+
+# Regras de Negócio
 
 > **AVISO OBRIGATÓRIO PARA AGENTES DE DESENVOLVIMENTO:**  
 > Este documento trata **EXCLUSIVAMENTE das regras de negócio do sistema**.  
@@ -23,13 +27,14 @@
    - [3.3 Controle de Capacidade e Reserva Temporária de Vagas](#33-controle-de-capacidade-e-reserva-temporária-de-vagas)
    - [3.4 Ciclo de Vida e Máquina de Estados da Inscrição](#34-ciclo-de-vida-e-máquina-de-estados-da-inscrição)
    - [3.5 Lista de Espera](#35-lista-de-espera)
-4. [Contexto 3: Pagamentos com Checkout Hospedado/Modal (`payments`)](#4-contexto-3-pagamentos-com-checkout-hospedado-modal-payments)
-   - [4.1 Modelo de Checkout Desacoplado (Hosted Checkout / Modal)](#41-modelo-de-checkout-desacoplado-hosted-checkout--modal)
+4. [Contexto 3: Pagamentos com PagBank em Popup/Modal (`payments`)](#4-contexto-3-pagamentos-com-pagbank-em-popupmodal-payments)
+   - [4.1 Modelo de Checkout Externo via PagBank (Popup / Lightbox)](#41-modelo-de-checkout-externo-via-pagbank-popup--lightbox)
    - [4.2 Referência Unívoca e Ciclo do Pagamento](#42-referência-unívoca-e-ciclo-do-pagamento)
-   - [4.3 Tabela De-Para de Status do Provedor de Pagamento](#43-tabela-de-para-de-status-do-provedor-de-pagamento)
+   - [4.3 Tabela De-Para de Status PagBank para Domínio Interno](#43-tabela-de-para-de-status-pagbank-para-domínio-interno)
    - [4.4 Idempotência, Webhooks e Reconciliação](#44-idempotência-webhooks-e-reconciliação)
    - [4.5 Cupons e Cortesias](#45-cupons-e-cortesias)
    - [4.6 Cancelamentos Financeiros e Estornos](#46-cancelamentos-financeiros-e-estornos)
+   - [4.7 Requisitos Técnicos e Preparação para Integração PagBank](#47-requisitos-técnicos-e-preparação-para-integração-pagbank)
 5. [Contexto 4: Acreditação, Check-in e Presença (`checkin`)](#5-contexto-4-acreditação-check-in-e-presença-checkin)
    - [5.1 Credencial e QR Code](#51-credencial-e-qr-code)
    - [5.2 Regras de Check-in e Validação](#52-regras-de-check-in-e-validação)
@@ -56,7 +61,7 @@ O **RaroTickets** é um ecossistema de gestão de eventos corporativos, treiname
 
 ### 1.1 Princípios de Domínio
 1. **Rastreabilidade Ponta a Ponta**: Toda ação que altera estado do evento, participante, vaga ou financeiro deve ser imutável e auditável.
-2. **Desacoplamento de Dados Sensíveis de Pagamento**: O sistema **não** coleta, valida ou armazena números de cartão de crédito, CVV ou códigos bancários internos. Todo o pagamento é delegado a um provedor em modal ou página segura (Hosted Checkout).
+2. **Desacoplamento de Dados Sensíveis de Pagamento**: O sistema **não** coleta, valida ou armazena números de cartão de crédito, CVV ou códigos bancários internos. Todo o pagamento é delegado ao **PagBank** através de popup/modal externo ou janela segura (Hosted Checkout). O RaroTickets atua apenas iniciando a cobrança com sua referência interna e recebendo a confirmação posterior do pagamento.
 3. **Idempotência**: Nenhuma ação disparada externamente (notificações de provedores de pagamento, múltiplos cliques do usuário) pode provocar duplicação de dados, cobranças repetidas ou corrupção de vagas.
 4. **Isomorfismo e Validações de Domínio**: Regras de negócio vivem no Domínio e utilizam o *Result Pattern* para tratamento de falhas previsíveis.
 
@@ -176,53 +181,79 @@ stateDiagram-v2
 
 ---
 
-## 4. Contexto 3: Pagamentos com Checkout Hospedado/Modal (`payments`)
+## 4. Contexto 3: Pagamentos com PagBank em Popup/Modal (`payments`)
 
-### 4.1 Modelo de Checkout Desacoplado (Hosted Checkout / Modal)
-- **RN-PAG-01 (Checkout em Modal / Hosted Checkout)**: O sistema adota checkout hospedado/modal (como *Mercado Pago Checkout Pro* ou equivalente). Ao clicar em pagar, abre-se um modal seguro sobre a aplicação (ou redirecionamento seguro oficial do provedor).
-- **RN-PAG-02 (Zero Retenção de Dados Sensíveis)**: O sistema **nunca** coleta, processa ou armazena números de cartão de crédito, CVV ou dados bancários do participante. Toda a transação ocorre dentro do ambiente certificado do provedor.
-- **RN-PAG-03 (Métodos Oferecidos pelo Modal)**: O modal do provedor oferece ao cliente:
-  - **PIX** (com QR Code dinâmico e código Copia e Cola gerados pelo provedor);
-  - **Cartão de Crédito** (com parcelamento configurado pelas regras do evento e análise de risco pelo provedor);
-  - **Boleto Bancário** (com vencimento gerido pelo provedor).
+### 4.1 Modelo de Checkout Externo via PagBank (Popup / Lightbox)
+- **RN-PAG-01 (Provedor Oficial PagBank)**: O provedor oficial de integração de pagamentos do sistema é o **PagBank** (PagSeguro). O pagamento é executado através de popup/modal externo (Lightbox / Checkout PagBank) ou janela segura oficial fornecida pelo PagBank.
+- **RN-PAG-02 (Papel do Sistema: Apenas Iniciação e Confirmação)**: O sistema RaroTickets atua exclusivamente como originador da cobrança e receptor da confirmação. Ao clicar em realizar pagamento, o sistema gera a ordem no PagBank e abre o popup/modal oficial. O RaroTickets aguarda apenas a notificação de confirmação financeira para validar a inscrição.
+- **RN-PAG-03 (Zero Retenção de Dados Sensíveis)**: O sistema **nunca** coleta, processa ou armazena números de cartão de crédito, CVV ou credenciais bancárias do participante. O participante digita seus dados estritamente dentro do ambiente protegido e certificado do PagBank.
+- **RN-PAG-04 (Métodos Oferecidos pelo PagBank no Popup)**: O popup oficial do PagBank oferece as opções configuradas:
+  - **PIX** (com geração do QR Code e código copia-e-cola diretamente na interface do PagBank);
+  - **Cartão de Crédito** (com parcelamento gerido pelas regras do evento e análise de risco própria do PagBank);
+  - **Boleto Bancário** (com emissão e instruções sob responsabilidade do PagBank).
 
 ### 4.2 Referência Unívoca e Ciclo do Pagamento
-- **RN-PAG-04 (Identificador Externo Unívoco)**: Toda sessão de cobrança criada no provedor deve receber o código único da inscrição no campo de referência externa:
-  $$\text{external\_reference} = \text{inscricaoId}$$
-- **RN-PAG-05 (Prevenção de Cobranças Duplicadas)**: Antes de abrir uma nova sessão de pagamento no provedor, o sistema verifica se já existe uma sessão aberta e válida para a mesma inscrição, reutilizando-a se estiver dentro da validade.
+- **RN-PAG-05 (Identificador Externo Unívoco - Reference ID)**: Toda requisição de criação de cobrança/ordem enviada ao PagBank deve receber o identificador único da inscrição no campo de referência interna:
+  $$\text{reference\_id} = \text{inscricaoId}$$
+- **RN-PAG-06 (Prevenção de Cobranças Duplicadas)**: Antes de abrir uma nova sessão de pagamento no PagBank, o sistema verifica se já existe uma sessão/ordem aberta e válida para a mesma inscrição, reutilizando-a se estiver dentro da validade.
 
-### 4.3 Tabela De-Para de Status do Provedor de Pagamento
-Para manter a independência arquitetural, os retornos de status do provedor são obrigatoriamente convertidos para os status internos de domínio:
+### 4.3 Tabela De-Para de Status PagBank para Domínio Interno
+Para manter a independência arquitetural e isolamento do domínio, os status recebidos da API do PagBank são convertidos para os status internos de domínio:
 
-| Status do Provedor (Ex: Mercado Pago / PagBank) | Status Interno do Pagamento | Efeito na Inscrição | Impacto na Vaga |
+| Status Oficial PagBank | Status Interno do Pagamento | Efeito na Inscrição | Impacto na Vaga |
 | :--- | :--- | :--- | :--- |
-| `pending`, `in_process`, `authorized` | `AGUARDANDO` | Permanece `AGUARDANDO_PAGAMENTO` | Reserva mantida |
-| `approved`, `paid` | `PAGO` | Transiciona para `CONFIRMADA` | Vaga definitiva |
-| `rejected`, `declined` | `RECUSADO` | Permanece `AGUARDANDO_PAGAMENTO` (permite retry) | Reserva mantida até timeout |
-| `cancelled` | `CANCELADO` | Transiciona para `CANCELADA` | Libera vaga |
-| `expired` | `EXPIRADO` | Transiciona para `CANCELADA` | Libera vaga |
-| `refunded`, `charged_back` | `ESTORNADO` | Mantém registro; avalia cancelamento de inscrição | Libera vaga se cancelada |
+| `WAITING_PAYMENT`, `IN_ANALYSIS`, `AUTHORIZED` | `AGUARDANDO` | Permanece `AGUARDANDO_PAGAMENTO` | Reserva de 15 min mantida |
+| `PAID`, `AUTHORIZED_AND_CAPTURED` | `PAGO` | Transiciona para `CONFIRMADA` | Vaga definitiva confirmada |
+| `DECLINED`, `REJECTED` | `RECUSADO` | Permanece `AGUARDANDO_PAGAMENTO` (permite retry) | Reserva mantida até expirar |
+| `CANCELED` | `CANCELADO` | Transiciona para `CANCELADA` | Vaga liberada |
+| `EXPIRED` | `EXPIRADO` | Transiciona para `CANCELADA` | Vaga liberada |
+| `REFUNDED` | `ESTORNADO` | Mantém registro; avalia cancelamento de inscrição | Vaga liberada se cancelada |
 
 ### 4.4 Idempotência, Webhooks e Reconciliação
-- **RN-PAG-06 (Idempotência Estrita no Webhook)**: O endpoint que recebe notificações assíncronas do provedor deve ser idempotente. Processar o mesmo webhook repetidas vezes não pode duplicar confirmações, enviar emails redundantes ou corromper o estado financeiro.
-- **RN-PAG-07 (Armazenamento de Notificações)**: Toda notificação recebida é armazenada integralmente (payload bruto, timestamp, assinatura) para auditoria e conferência.
-- **RN-PAG-08 (Reconciliação Financeira Ativa)**: O sistema não depende exclusivamente de webhooks. Uma rotina de reconciliação em background consulta proativamente o status de pagamentos em `AGUARDANDO` para tratar eventuais falhas de entrega de webhook.
-- **RN-PAG-09 (Tratamento de Pagamento Tardio)**: Se uma notificação de pagamento aprovado chegar após a expiração da reserva:
-  - Se ainda houver vagas disponíveis no evento: a inscrição é confirmada e a vaga é alocada.
-  - Se as vagas estiverem esgotadas: o sistema marca o pagamento como `ESTORNO_SOLICITADO` e notifica o time financeiro para reembolso automático, mantendo a inscrição em lista de espera ou cancelada.
+- **RN-PAG-07 (Idempotência Estrita no Webhook)**: O endpoint que recebe notificações assíncronas do PagBank deve ser idempotente. Processar o mesmo webhook repetidas vezes não pode duplicar confirmações, disparar notificações redundantes ou corromper a contagem de vagas.
+- **RN-PAG-08 (Armazenamento de Notificações)**: Toda notificação recebida do PagBank é armazenada integralmente (payload bruto, timestamp e headers de autenticidade) para auditoria e conferência.
+- **RN-PAG-09 (Reconciliação Financeira Ativa)**: O sistema não depende exclusivamente de webhooks. Uma rotina de background consulta periodicamente a API de ordens do PagBank para checar cobranças em situação `AGUARDANDO`, tratando eventuais instabilidades ou falhas de envio de notificações.
+- **RN-PAG-10 (Tratamento de Pagamento Tardio)**: Se uma notificação de pagamento aprovado do PagBank chegar após a expiração da reserva:
+  - Se ainda houver vagas disponíveis no evento: a inscrição é confirmada e a vaga é alocada definitivamente.
+  - Se as vagas estiverem esgotadas: o sistema registra o pagamento como `ESTORNO_NECESSARIO`, alerta o operador financeiro para realizar o estorno no PagBank e posiciona a inscrição como cancelada ou em lista de espera.
 
 ### 4.5 Cupons e Cortesias
-- **RN-PAG-10 (Tipos de Cupom)**: O sistema suporta cupons de desconto dos tipos:
+- **RN-PAG-11 (Tipos de Cupom)**: O sistema suporta cupons de desconto dos tipos:
   - `PERCENTUAL` (desconto percentual sobre o valor do lote);
   - `VALOR_FIXO` (abatimento em Reais);
   - `CORTESIA` (100% de desconto).
-- **RN-PAG-11 (Invariante de Valor Final)**: O valor final a pagar nunca pode ser negativo:
+- **RN-PAG-12 (Invariante de Valor Final)**: O valor final a pagar nunca pode ser negativo:
   $$\text{ValorFinal} = \max\left(0, \text{ValorLote} - \text{ValorDesconto}\right)$$
-- **RN-PAG-12 (Cortesias / Valor Zero)**: Quando $\text{ValorFinal} = 0$ (por cupom ou cortesia administrativa), a etapa de abertura de modal de pagamento é dispensada, confirmando-se a inscrição diretamente.
+- **RN-PAG-13 (Cortesias / Valor Zero)**: Quando $\text{ValorFinal} = 0$ (por cupom ou concessão administrativa), a etapa de abertura de popup do PagBank é dispensada, confirmando-se a inscrição diretamente no domínio.
 
 ### 4.6 Cancelamentos Financeiros e Estornos
-- **RN-PAG-13 (Separação de Operações)**: Cancelamento de inscrição e cancelamento financeiro/estorno são operações distintas e independentes.
-- **RN-PAG-14 (Imutabilidade de Registros Financeiros)**: Nenhum pagamento é apagado do banco de dados. Estornos e cancelamentos geram novos registros de evento financeiro com rastreabilidade de operador, valor e motivo.
+- **RN-PAG-14 (Separação de Operações)**: Cancelamento de inscrição e cancelamento/estorno financeiro junto ao PagBank são operações distintas e independentes.
+- **RN-PAG-15 (Imutabilidade de Registros Financeiros)**: Nenhum pagamento é apagado do banco de dados. Estornos e cancelamentos geram novos registros de evento financeiro com rastreabilidade de operador, valor e motivo.
+
+### 4.7 Requisitos Técnicos e Preparação para Integração PagBank
+
+Para que a integração em popup com o PagBank opere em produção e homologação, os seguintes requisitos e credenciais devem ser providenciados junto ao PagBank:
+
+#### 4.7.1 Credenciais e Parâmetros Necessários (A preencher futuramente)
+1. **Conta Comercial PagBank**: Conta jurídica ou pessoa física verificada e apta para emissão de cobranças online.
+2. **Ambiente e Chaves de API**:
+   - `PAGBANK_ENV`: Ambiente ativo (`sandbox` ou `production`).
+   - `PAGBANK_BASE_URL`: URL base da API oficial v4 (`https://sandbox.api.pagseguro.com` ou `https://api.pagseguro.com`).
+   - `PAGBANK_TOKEN`: Token de autenticação Bearer da API oficial v4.
+   - `PAGBANK_PUBLIC_KEY`: Chave pública para utilização do SDK de checkout/popup do PagBank no frontend, caso aplicável.
+3. **Webhook e Segurança**:
+   - `PAGBANK_WEBHOOK_URL`: Endpoint exposto pelo sistema para recepção das notificações (`${APP_BASE_URL}/api/v1/payments/webhooks/pagbank`).
+   - `PAGBANK_WEBHOOK_SECRET`: Chave ou assinatura de autenticação para validar a procedência dos webhooks recebidos do PagBank.
+4. **URLs de Retorno**:
+   - Redirecionamento em caso de conclusão no popup: `${APP_BASE_URL}/inscricao/[id]/sucesso`.
+   - Redirecionamento em caso de cancelamento/falha: `${APP_BASE_URL}/inscricao/[id]/pagamento`.
+
+#### 4.7.2 Diretrizes de Preparação para o Agente de Desenvolvimento
+Mesmo antes do fornecimento das credenciais reais acima, o agente de desenvolvimento **DEVE preparar toda a arquitetura de suporte**:
+1. **Porta de Domínio Agnóstica**: Manter a interface `PaymentGatewayPort` (ou `PagBankGatewayPort`) no módulo de pagamentos, contendo métodos para criar ordem de pagamento em popup (`createCheckoutSession`), consultar status (`getPaymentStatus`), processar webhook (`parseWebhookNotification`) e solicitar estorno (`refundPayment`).
+2. **Adapter Mock/Fake**: Criar um `MockPagBankPaymentGatewayAdapter` (ou `InMemoryPaymentGatewayAdapter`) que simula a abertura do popup e a recepção de webhooks para testes unitários, de integração e desenvolvimento local sem necessidade de credenciais ativas.
+3. **Contrato de Variáveis de Ambiente**: Declarar todos os parâmetros acima no arquivo `.env.example` com comentários claros.
+4. **Acoplamento Zero**: Garantir que as regras de negócio de inscrição, vagas e eventos não façam chamadas HTTP diretas nem importem SDKs do PagBank — toda a comunicação deve passar estritamente pela porta de domínio. Quando os requisitos do PagBank forem preenchidos, bastará implementar o adapter de infraestrutura real.
 
 ---
 
@@ -323,7 +354,7 @@ Conforme definido em [authentication.md](authentication.md), o sistema autentica
 | Invariante | Expressão Formal | Violação Resulta em |
 | :--- | :--- | :--- |
 | **Não Superlotação** | $\text{Confirmadas} + \text{ReservasAtivas} \le \text{CapacidadeMaxima}$ | `Result.fail(DomainError.create('RN-RES-02', 'Vagas esgotadas'))` |
-| **Preço Não Negativo** | $\text{PrecoFinal} = \max(0, \text{PrecoLote} - \text{Desconto}) \ge 0$ | `Result.fail(DomainError.create('RN-PAG-11', 'Valor inválido'))` |
+| **Preço Não Negativo** | $\text{PrecoFinal} = \max(0, \text{PrecoLote} - \text{Desconto}) \ge 0$ | `Result.fail(DomainError.create('RN-PAG-12', 'Valor inválido'))` |
 | **Check-in Único** | $\text{Count}(\text{CheckInsPorInscricao}) \le 1$ | `Result.fail(DomainError.create('RN-CHK-04', 'Check-in já realizado'))` |
 | **Elegibilidade Certificado** | $\text{EventoFinalizado} \land \text{CheckInRealizado} = \text{true}$ | `Result.fail(DomainError.create('RN-CRT-02', 'Participante não elegível'))` |
 
@@ -340,15 +371,15 @@ Cenário: Duas pessoas tentam reservar a última vaga simultaneamente
   E é oferecido ao segundo participante ingressar na LISTA_ESPERA
 ```
 
-#### Cenário: Idempotência de notificação do Provedor de Pagamento
+#### Cenário: Idempotência de notificação do PagBank
 ```gherkin
-Cenário: Webhook de pagamento recebido em duplicidade
+Cenário: Webhook de pagamento recebido do PagBank em duplicidade
   Dado que a inscrição "INS-100" está com status AGUARDANDO_PAGAMENTO
-  Quando o provedor envia o webhook de pagamento aprovado para a inscrição "INS-100"
+  Quando o PagBank envia o webhook de pagamento aprovado para a inscrição "INS-100"
   Então o pagamento é marcado como PAGO e a inscrição transiciona para CONFIRMADA
   E o QR Code de credencial é gerado
-  Quando o provedor reenvia a mesma notificação de pagamento aprovado 30 segundos depois
+  Quando o PagBank reenvia a mesma notificação de pagamento aprovado 30 segundos depois
   Então o sistema reconhece a notificação já processada
-  E responde HTTP 200 ao provedor
+  E responde HTTP 200 ao PagBank
   E nenhuma transação secundária ou e-mail duplicado é gerado
 ```
