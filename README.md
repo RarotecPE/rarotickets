@@ -26,6 +26,14 @@ O seed exige `DATABASE_URL`, `APP_SECRET_KEY` e `QR_SIGNING_SECRET` válidos e �
 
 As migrações SQL versionadas ficam em `src/server/infrastructure/persistence/migrations`. `npm run db:migrate` aplica as migrações e `npm run db:generate` gera novas migrações a partir do schema Drizzle. `npm run db:seed` é um script separado e idempotente que cria eventos em diferentes estados, lotes, cupons, programação, inscrições, pagamentos, check-ins, certificados e registros de auditoria fictícios. Reexecutar o seed atualiza os mesmos registros de demonstração. **Nunca execute o seed em produção.**
 
+Para provisionar manualmente um banco PostgreSQL vazio, use o script consolidado `migrations/001_create_tables.sql`, conectado ao banco de destino:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/001_create_tables.sql
+```
+
+Esse bootstrap inclui o schema atual (tabelas, enums, índices e relacionamentos) e não registra o histórico interno do Drizzle. Para a mesma base, escolha **ou** este script **ou** `npm run db:migrate`; não execute os dois.
+
 As datas são persistidas em UTC. Inscrições e certificados usam códigos públicos; tokens de acesso são armazenados somente como hash.
 
 ## Integrações
