@@ -1,0 +1,158 @@
+import type { DiscountType } from "../services/pricing.domain-service";
+import type { RegistrationStatus } from "../entities/registration.aggregate";
+import type { Result } from "@/@core/domain/result";
+import type { RegistrationRuleError } from "../entities/registration.aggregate";
+
+export type ParticipantInput = {
+  name: string;
+  cpf: string;
+  email: string;
+  phone: string;
+  birthDate: Date | null;
+  company: string | null;
+  jobTitle: string | null;
+  termsConsent: boolean;
+  marketingConsent: boolean;
+};
+export type RegistrationAttachment = { id: string; fieldId: string; storageKey: string; originalName: string; mimeType: string; sizeBytes: number };
+export type CreatePublicRegistrationParams = {
+  eventId: string;
+  participant: ParticipantInput;
+  answers: Record<string, unknown>;
+  files: RegistrationAttachment[];
+  lotId: string | null;
+  couponCode: string | null;
+  registrationId: string;
+  participantId: string;
+  registrationCode: string;
+  accessTokenHash: string;
+  at: Date;
+};
+export type PublicRegistrationResult = {
+  registrationId: string;
+  registrationCode: string;
+  participantTaxId: string;
+  eventTitle: string;
+  eventSlug: string;
+  eventStartAt: Date;
+  participantName: string;
+  participantEmail: string;
+  participantPhone: string;
+  status: RegistrationStatus;
+  originalCents: number;
+  discountCents: number;
+  finalCents: number;
+  reservationExpiresAt: Date | null;
+  waitlistExpiresAt: Date | null;
+  paymentId: string | null;
+  paymentExternalId: string | null;
+  checkoutUrl: string | null;
+  accessTokenHash: string;
+  shouldCreateCheckout: boolean;
+};
+export type ReserveRegistrationResult = PublicRegistrationResult;
+export type CreatePublicRegistrationOutput = Result<ReserveRegistrationResult, RegistrationRuleError>;
+export type CancelRegistrationResult = { registrationCode: string; status: RegistrationStatus; eventId: string; seatReleased: boolean };
+export type ExpireReservationsParams = { at: Date };
+export type ExpireReservationsResult = { expiredCount: number; releasedEventIds: string[] };
+export type WaitlistCandidate = { registrationId: string; eventId: string; registrationCode: string; eventTitle: string; eventSlug: string; eventStartAt: Date; chargeType: "gratuito" | "pago"; participantName: string; participantEmail: string; participantPhone: string; createdAt: Date };
+export type FindNextWaitlistedParams = { eventId: string; at: Date };
+export type PromoteNextWaitlistedParams = { eventId: string; registrationId: string; accessTokenHash: string; paymentProvider: "mock" | "pagbank"; at: Date; expiresAt: Date };
+export type WaitlistPromotionResult = WaitlistCandidate & { status: "confirmada" | "pendente"; originalCents: number; finalCents: number; waitlistExpiresAt: Date | null };
+export type AttachCheckoutParams = { registrationId: string; paymentId: string; provider: string; externalId: string; checkoutUrl: string; at: Date };
+export type FindPortalRegistrationParams = { accessTokenHash: string };
+export type CheckoutDetailsParams = { accessTokenHash: string };
+export type ParticipantCheckoutDetails = { registrationId: string; registrationCode: string; status: RegistrationStatus; expiresAt: Date | null; paymentId: string | null; checkoutUrl: string | null; amountCents: number; customerName: string; customerEmail: string; customerTaxId: string; customerPhone: string; eventTitle: string };
+export type FindRegistrationNotificationParams = { registrationCode: string };
+export type RegistrationNotificationDetails = { registrationId: string; registrationCode: string; status: RegistrationStatus; participantName: string; participantEmail: string; participantPhone: string; eventTitle: string; eventStartAt: Date; finalCents: number };
+export type FindPrivateRegistrationFileParams = { fileId: string; userId: string; canViewAll: boolean };
+export type PrivateRegistrationFile = { id: string; storageKey: string; originalName: string; mimeType: string; sizeBytes: number; eventId: string };
+export type ParticipantPortalView = {
+  registrationId: string;
+  code: string;
+  status: RegistrationStatus;
+  name: string;
+  email: string;
+  eventId: string;
+  eventTitle: string;
+  eventSlug: string;
+  eventStartAt: Date;
+  eventEndAt: Date;
+  modality: string;
+  onlineUrl: string | null;
+  location: string | null;
+  lotName: string | null;
+  originalCents: number;
+  discountCents: number;
+  finalCents: number;
+  reservationExpiresAt: Date | null;
+  waitlistExpiresAt: Date | null;
+  credentialToken: string | null;
+  qrPayload: string | null;
+  checkoutUrl: string | null;
+  certificateCode: string | null;
+  certificateIssuedAt: Date | null;
+};
+export type ListRegistrationsParams = { eventId?: string; query?: string; status?: string; page: number; pageSize: number; userId: string; canViewAll: boolean };
+export type RegistrationListItem = {
+  id: string;
+  code: string;
+  eventId: string;
+  eventTitle: string;
+  participantId: string;
+  participantName: string;
+  participantEmail: string;
+  participantPhone: string;
+  cpf: string;
+  status: RegistrationStatus;
+  finalCents: number;
+  createdAt: Date;
+  checkInAt: Date | null;
+  checkInBy: string | null;
+};
+export type RegistrationListResult = { items: RegistrationListItem[]; total: number };
+export type RegistrationEventAccessParams = { eventId: string; userId: string; canViewAll: boolean };
+export type CancelRegistrationParams = { registrationId: string; reason: string; actorId: string; at: Date; canManageAll: boolean };
+export type PaymentWebhookUpdateParams = { provider: string; eventId: string; referenceId: string; externalId: string; status: string; amountCents: number | null; payload: Record<string, unknown>; at: Date };
+export type PaymentWebhookUpdateResult = { duplicate: boolean; registrationCode: string | null; status: RegistrationStatus | null; refundRequired: boolean };
+export type MockPaymentParams = { referenceId: string; status: "PAID" | "DECLINED"; at: Date };
+export type CouponReadModel = { id: string; code: string; type: DiscountType; discountValue: number; maxUses: number | null; usedCount: number; startAt: Date; endAt: Date; active: boolean };
+
+export interface IWaitlistPromotionRepository {
+  findNextWaitlisted(params: FindNextWaitlistedParams): Promise<WaitlistCandidate | null>;
+  promoteNextWaitlisted(params: PromoteNextWaitlistedParams): Promise<WaitlistPromotionResult | null>;
+}
+
+export interface IRegistrationRepository extends IWaitlistPromotionRepository {
+  createPublic(params: CreatePublicRegistrationParams): Promise<CreatePublicRegistrationOutput>;
+  attachCheckout(params: AttachCheckoutParams): Promise<void>;
+  findPortal(params: FindPortalRegistrationParams): Promise<ParticipantPortalView | null>;
+  findCheckoutDetails(params: CheckoutDetailsParams): Promise<ParticipantCheckoutDetails | null>;
+  findNotificationDetails(params: FindRegistrationNotificationParams): Promise<RegistrationNotificationDetails | null>;
+  findPrivateFile(params: FindPrivateRegistrationFileParams): Promise<PrivateRegistrationFile | null>;
+  list(params: ListRegistrationsParams): Promise<RegistrationListResult>;
+  cancel(params: CancelRegistrationParams): Promise<CancelRegistrationResult | null>;
+  findNextWaitlisted(params: FindNextWaitlistedParams): Promise<WaitlistCandidate | null>;
+  promoteNextWaitlisted(params: PromoteNextWaitlistedParams): Promise<WaitlistPromotionResult | null>;
+  listWaitlistedEventIds(): Promise<string[]>;
+  applyPaymentWebhook(params: PaymentWebhookUpdateParams): Promise<PaymentWebhookUpdateResult>;
+  simulatePayment(params: MockPaymentParams): Promise<PaymentWebhookUpdateResult>;
+  expireReservations(params: ExpireReservationsParams): Promise<ExpireReservationsResult>;
+}
+
+export abstract class RegistrationRepository implements IRegistrationRepository {
+  abstract createPublic(params: CreatePublicRegistrationParams): Promise<CreatePublicRegistrationOutput>;
+  abstract attachCheckout(params: AttachCheckoutParams): Promise<void>;
+  abstract findPortal(params: FindPortalRegistrationParams): Promise<ParticipantPortalView | null>;
+  abstract findCheckoutDetails(params: CheckoutDetailsParams): Promise<ParticipantCheckoutDetails | null>;
+  abstract findNotificationDetails(params: FindRegistrationNotificationParams): Promise<RegistrationNotificationDetails | null>;
+  abstract findPrivateFile(params: FindPrivateRegistrationFileParams): Promise<PrivateRegistrationFile | null>;
+  abstract list(params: ListRegistrationsParams): Promise<RegistrationListResult>;
+  abstract cancel(params: CancelRegistrationParams): Promise<CancelRegistrationResult | null>;
+  abstract findNextWaitlisted(params: FindNextWaitlistedParams): Promise<WaitlistCandidate | null>;
+  abstract promoteNextWaitlisted(params: PromoteNextWaitlistedParams): Promise<WaitlistPromotionResult | null>;
+  abstract listWaitlistedEventIds(): Promise<string[]>;
+  abstract applyPaymentWebhook(params: PaymentWebhookUpdateParams): Promise<PaymentWebhookUpdateResult>;
+  abstract simulatePayment(params: MockPaymentParams): Promise<PaymentWebhookUpdateResult>;
+  abstract expireReservations(params: ExpireReservationsParams): Promise<ExpireReservationsResult>;
+}
