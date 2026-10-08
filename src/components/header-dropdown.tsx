@@ -14,10 +14,17 @@ export function HeaderIconButton({ label, active = false, expanded, controls, ch
 export function HeaderDropdown({ id, open, onClose, children, className, align = "right" }: HeaderDropdownProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const previousPathnameRef = useRef(pathname);
+
   useEffect(() => {
     if (!open) return;
     const closeOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) onClose();
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (containerRef.current?.contains(target)) return;
+      const trigger = document.querySelector(`[aria-controls="${id}"]`);
+      if (trigger?.contains(target)) return;
+      onClose();
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -28,8 +35,15 @@ export function HeaderDropdown({ id, open, onClose, children, className, align =
       document.removeEventListener("pointerdown", closeOutside);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [open, onClose]);
-  useEffect(() => { if (open) onClose(); }, [open, onClose, pathname]);
+  }, [open, onClose, id]);
+
+  useEffect(() => {
+    if (previousPathnameRef.current !== pathname) {
+      previousPathnameRef.current = pathname;
+      if (open) onClose();
+    }
+  }, [pathname, open, onClose]);
+
   if (!open) return null;
   return <div ref={containerRef} id={id} className={cn("absolute top-full z-[60] mt-2 max-h-[70dvh] w-[min(calc(100vw-1.5rem),20rem)] overflow-y-auto overflow-x-hidden rounded-xl border border-app-border bg-app-surface shadow-2xl", align === "right" ? "right-0" : "right-1/2 translate-x-1/2", className)}>{children}</div>;
 }
