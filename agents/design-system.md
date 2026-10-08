@@ -774,24 +774,27 @@ Ao adaptar para outro produto, trocar `NAV_ITEMS`, textos da marca, caminho do l
 
 #### 9.1.4 Código de HeaderIconButton e HeaderDropdown
 
-**Implementação atual completa** de [header-dropdown.tsx](../src/components/header-dropdown.tsx). O `stopPropagation` no gatilho permite abrir/trocar o menu sem disparar o fechamento por clique no documento.
+**Implementação atual completa** de [header-dropdown.tsx](../src/components/header-dropdown.tsx). Inclui acessibilidade (`aria-controls`, `aria-expanded`), fechamento correto por navegação de rota e prevenção do bug de fechamento prematuro no clique fora.
 
 ```tsx
 "use client";
 
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
-type HeaderIconButtonProps = {
+export type HeaderIconButtonProps = {
   label: string;
   active?: boolean;
+  expanded?: boolean;
+  controls?: string;
   children: ReactNode;
   onClick?: () => void;
-  type?: "button" | "submit";
   className?: string;
 };
 
-type HeaderDropdownProps = {
+export type HeaderDropdownProps = {
+  id: string;
   open: boolean;
   onClose: () => void;
   children: ReactNode;
@@ -802,24 +805,26 @@ type HeaderDropdownProps = {
 export function HeaderIconButton({
   label,
   active = false,
+  expanded,
+  controls,
   children,
   onClick,
-  type = "button",
-  className = "",
+  className,
 }: HeaderIconButtonProps) {
   return (
     <button
-      type={type}
-      onClick={(event: MouseEvent<HTMLButtonElement>) => {
-        event.stopPropagation();
-        onClick?.();
-      }}
-      className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border text-app-muted-foreground transition-colors hover:text-app-foreground sm:h-10 sm:w-10 ${
+      type="button"
+      onClick={handleToggle({ onClick })}
+      className={cn(
+        "inline-flex h-9 w-9 items-center justify-center rounded-lg border text-app-muted-foreground transition-colors hover:text-app-foreground sm:h-10 sm:w-10",
         active
           ? "border-app-primary/40 bg-app-primary/15 text-app-primary"
-          : "border-transparent hover:border-app-border hover:bg-app-surface-elevated"
-      } ${className}`}
+          : "border-transparent hover:border-app-border hover:bg-app-surface-elevated",
+        className,
+      )}
       aria-label={label}
+      aria-expanded={expanded}
+      aria-controls={controls}
       title={label}
     >
       {children}
@@ -827,47 +832,89 @@ export function HeaderIconButton({
   );
 }
 
-export function HeaderDropdown({ open, onClose, children, className = "", align = "right" }: HeaderDropdownProps) {
-  const ref = useRef<HTMLDivElement | null>(null);
+export function HeaderDropdown({
+  id,
+  open,
+  onClose,
+  children,
+  className,
+  align = "right",
+}: HeaderDropdownProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const previousPathnameRef = useRef(pathname);
 
   useEffect(() => {
     if (!open) return;
-
-    function onClick(event: globalThis.MouseEvent) {
-      if (!ref.current?.contains(event.target as Node)) onClose();
-    }
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-
-    document.addEventListener("click", onClick);
-    document.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      document.removeEventListener("click", onClick);
-      document.removeEventListener("keydown", onKeyDown);
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (containerRef.current?.contains(target)) return;
+      const trigger = document.querySelector(`[aria-controls="${id}"]`);
+      if (trigger?.contains(target)) return;
+      onClose();
     };
-  }, [open, onClose]);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open, onClose, id]);
 
   useEffect(() => {
-    onClose();
-  }, [pathname, onClose]);
+    if (previousPathnameRef.current !== pathname) {
+      previousPathnameRef.current = pathname;
+      if (open) onClose();
+    }
+  }, [pathname, open, onClose]);
 
   if (!open) return null;
-
-  const alignmentClass = align === "center" ? "left-1/2 -translate-x-1/2" : "right-0";
-
   return (
-    <div ref={ref} className={`absolute top-full z-[60] mt-2 ${alignmentClass} ${className}`}>
-      <div className="max-h-[70dvh] w-[min(calc(100vw-1.5rem),20rem)] overflow-y-auto overflow-x-hidden rounded-xl border border-app-border bg-app-surface shadow-2xl">
-        {children}
-      </div>
+    <div
+      ref={containerRef}
+      id={id}
+      className={cn(
+        "absolute top-full z-[60] mt-2 max-h-[70dvh] w-[min(calc(100vw-1.5rem),20rem)] overflow-y-auto overflow-x-hidden rounded-xl border border-app-border bg-app-surface shadow-2xl",
+        align === "right" ? "right-0" : "right-1/2 translate-x-1/2",
+        className,
+      )}
+    >
+      {children}
     </div>
   );
 }
+
+type ToggleHandlerParams = { onClick?: () => void };
+type ButtonMouseHandler = (event: MouseEvent<HTMLButtonElement>) => void;
+function handleToggle(params: ToggleHandlerParams): ButtonMouseHandler {
+  return (event) => {
+    event.stopPropagation();
+    params.onClick?.();
+  };
+}
 ```
+
+##### 9.1.4.1 Regras Críticas de Ciclo de Vida: Prevenção do Bug "Abre e Fecha Imediatamente"
+
+Ao construir ou refatorar qualquer dropdown ou menu flutuante neste padrão, dois erros graves de ciclo de vida **NUNCA** devem ser cometidos:
+
+1. **Rastreamento de mudança de rota via `useRef(pathname)` (NUNCA disparar `onClose` na montagem):**
+   - ❌ **ERRADO:** `useEffect(() => { onClose(); }, [pathname, onClose])` ou `useEffect(() => { if (open) onClose(); }, [open, onClose, pathname])`.
+     No React, efeitos executam após a renderização. Se o efeito observar `open` ou rodar na montagem/alteração do estado de abertura, ele executará `onClose()` no **mesmo milissegundo em que o menu se abre**, fazendo com que o dropdown pisque na tela e suma instantaneamente.
+   - ✅ **CORRETO:** Manter uma referência da rota anterior com `const previousPathnameRef = useRef(pathname)`. O `onClose()` só deve ser invocado se e somente se a rota atual for diferente da rota armazenada na referência (`previousPathnameRef.current !== pathname`).
+
+2. **Detecção de clique fora com exclusão do botão disparador (`aria-controls`):**
+   - ❌ **ERRADO:** `if (!containerRef.current?.contains(target)) onClose();` sem verificar se o clique ocorreu no botão disparador.
+     O evento `pointerdown` do documento dispara **antes** do evento `click` do botão disparador. Se o clique no botão for interpretado como "clique fora do painel", o `pointerdown` chamará `onClose()` (fechando o menu), e logo em seguida o evento `click` do botão disparará o handler de abertura/toggle (reabrindo-o), ou o estado ficará desincronizado.
+   - ✅ **CORRETO:** O listener de `pointerdown` deve consultar `document.querySelector('[aria-controls="' + id + '"]')` e ignorar o fechamento caso o `target` pertença ao botão disparador (`if (trigger?.contains(target)) return;`). Dessa forma, o clique no ícone fecha ou abre o menu de forma limpa via seu próprio handler de alternância (`toggle`).
+
+3. **Acessibilidade bidirecional obrigatória (`id` e `aria-controls`):**
+   - O `HeaderDropdown` deve sempre possuir uma prop `id: string`.
+   - O `HeaderIconButton` que o controla deve receber `controls={id}` (que se traduz em `aria-controls={id}`) e `expanded={isOpen}` (que se traduz em `aria-expanded={isOpen}`).
 
 `align="right"` é o padrão para apps e conta. A opção `center` existe na API, mas não é usada nesse header. Não centralizar os menus da direita ao transportar o padrão.
 
@@ -1796,6 +1843,8 @@ Preservar mudanças sutis de cor/opacidade sem alterar dimensões. Não adiciona
 - Copiar Tailwind 3, shadcn ou imports `@/shared` do modelo para esta base Tailwind 4.
 - Usar títulos enormes, sombras em todos os cards e espaçamentos de landing page em telas administrativas.
 - Duplicar providers, `<main>` ou offsets do shell.
+- Fechamento imediato de dropdown por efeito de rota ingênuo: Nunca chamar `onClose()` em `useEffect` observando `open` ou `pathname` sem comparar com uma referência anterior (`previousPathnameRef.current !== pathname`). Isso faz com que o dropdown execute `onClose` logo após abrir, piscando na tela e fechando instantaneamente.
+- Listener de clique externo capturando o próprio botão disparador: Nunca registrar fechamento externo no documento sem verificar se o alvo (`target`) pertence ao botão disparador (`[aria-controls="${id}"]`). Sem essa proteção, o `pointerdown` no botão fecha o menu antes que o evento `click` do botão possa executar a alternância (`toggle`), impedindo o fechamento por clique no ícone ou causando reabertura involuntária.
 - Remover o foco, usar somente cor como status ou tratar `Field` visual como label acessível automático.
 - Declarar sucesso sem retorno do servidor; mostrar lista vazia quando houve erro.
 - Afirmar que ARIA, foco de modal, contraste, PWA ou sincronização de tema entre origens já estão completos.
