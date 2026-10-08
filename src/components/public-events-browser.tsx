@@ -28,7 +28,11 @@ export function PublicEventsBrowser({ variant }: PublicEventsBrowserProps) {
         const result = await ticketingApi.listPublicEvents({ query: filters.query, modality: filters.modality, limit: 24 });
         if (active) setEvents(result);
       } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : "Não foi possível carregar os eventos.");
+        if (active) {
+          const raw = caught instanceof Error ? caught.message : "";
+          const isTechnical = raw.includes("Failed query") || raw.includes("select \"");
+          setError(isTechnical ? "Não foi possível carregar os eventos no momento. Tente novamente em instantes." : raw || "Não foi possível carregar os eventos.");
+        }
       } finally {
         if (active) setLoading(false);
       }

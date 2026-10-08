@@ -6,9 +6,11 @@ import {
   desc,
   eq,
   gt,
+  gte,
   ilike,
   inArray,
   isNull,
+  lte,
   or,
   sql,
 } from "drizzle-orm";
@@ -142,7 +144,7 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
           and(
             eq(registrations.eventId, event.id),
             inArray(registrations.status, ["pendente", "aguardando_pagamento"]),
-            sql`${registrations.reservationExpiresAt} <= ${params.at}`,
+            lte(registrations.reservationExpiresAt, params.at),
             isNull(registrations.deletedAt),
           ),
         );
@@ -1182,7 +1184,7 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         .where(
           and(
             inArray(registrations.status, ["pendente", "aguardando_pagamento"]),
-            sql`${registrations.reservationExpiresAt} <= ${params.at}`,
+            lte(registrations.reservationExpiresAt, params.at),
             isNull(registrations.deletedAt),
           ),
         )
@@ -1277,8 +1279,8 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
     const filters = [
       eq(ticketLots.eventId, params.event.id),
       eq(ticketLots.active, true),
-      sql`${ticketLots.startAt} <= ${params.at}`,
-      sql`${ticketLots.endAt} >= ${params.at}`,
+      lte(ticketLots.startAt, params.at),
+      gte(ticketLots.endAt, params.at),
     ];
     if (params.selectedLotId)
       filters.push(eq(ticketLots.id, params.selectedLotId));
@@ -1300,7 +1302,10 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
               "pendente",
               "aguardando_pagamento",
             ]),
-            sql`(${registrations.status} = 'confirmada' or ${registrations.reservationExpiresAt} > ${params.at})`,
+            or(
+              eq(registrations.status, "confirmada"),
+              gt(registrations.reservationExpiresAt, params.at),
+            ),
             isNull(registrations.deletedAt),
           ),
         );
@@ -1334,8 +1339,8 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
           eq(coupons.code, code),
           eq(coupons.active, true),
           or(isNull(coupons.eventId), eq(coupons.eventId, eventId)),
-          sql`${coupons.startAt} <= ${at}`,
-          sql`${coupons.endAt} >= ${at}`,
+          lte(coupons.startAt, at),
+          gte(coupons.endAt, at),
         ),
       )
       .limit(1);
@@ -1356,10 +1361,11 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
     eventId: string,
     at: Date,
   ): Promise<{ confirmed: number; reserved: number }> {
+    const atIso = at.toISOString();
     const [row] = await transaction
       .select({
         confirmed: sql<number>`count(*) filter (where ${registrations.status} = 'confirmada')`,
-        reserved: sql<number>`count(*) filter (where ${registrations.status} in ('pendente', 'aguardando_pagamento') and ${registrations.reservationExpiresAt} > ${at})`,
+        reserved: sql<number>`count(*) filter (where ${registrations.status} in ('pendente', 'aguardando_pagamento') and ${registrations.reservationExpiresAt} > ${atIso})`,
       })
       .from(registrations)
       .where(

@@ -63,7 +63,12 @@ function buildRequestUrl(params: BuildRequestUrlParams): string {
 
 function parseApiError(params: ParseApiErrorParams): ApiError {
   const envelope = isRecord(params.payload) ? params.payload as ErrorEnvelope : null;
-  return new ApiError({ code: envelope?.error?.code ?? "API_ERROR", message: envelope?.error?.message ?? "A operação não foi concluída.", status: params.status, details: envelope?.error?.details });
+  const rawMessage = envelope?.error?.message ?? "A operação não foi concluída.";
+  const isTechnical = rawMessage.includes("Failed query") || rawMessage.includes("select \"");
+  const message = isTechnical
+    ? "Não foi possível carregar as informações do servidor. Tente novamente em instantes."
+    : rawMessage;
+  return new ApiError({ code: envelope?.error?.code ?? "API_ERROR", message, status: params.status, details: envelope?.error?.details });
 }
 
 type FormDataCandidate = unknown;

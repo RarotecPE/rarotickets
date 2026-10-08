@@ -98,13 +98,14 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
   private async buildReadModel(params: ReadModelBuildParams): Promise<EventReadModel> {
     const eventId = params.row.id;
     const at = params.at ?? new Date();
+    const atIso = at.toISOString();
     const [lotRows, fieldRows, activityRows, totals] = await Promise.all([
       this.database.select().from(ticketLots).where(eq(ticketLots.eventId, eventId)).orderBy(asc(ticketLots.sortOrder), asc(ticketLots.startAt)),
       this.database.select().from(eventFormFields).where(and(eq(eventFormFields.eventId, eventId), eq(eventFormFields.active, true))).orderBy(asc(eventFormFields.displayOrder)),
       this.database.select().from(eventActivities).where(eq(eventActivities.eventId, eventId)).orderBy(asc(eventActivities.startAt)),
       this.database.select({
         confirmed: sql<number>`count(*) filter (where ${registrations.status} = 'confirmada')`,
-        reserved: sql<number>`count(*) filter (where ${registrations.status} in ('pendente', 'aguardando_pagamento') and ${registrations.reservationExpiresAt} > ${at})`,
+        reserved: sql<number>`count(*) filter (where ${registrations.status} in ('pendente', 'aguardando_pagamento') and ${registrations.reservationExpiresAt} > ${atIso})`,
         waitlisted: sql<number>`count(*) filter (where ${registrations.status} = 'lista_espera')`,
       }).from(registrations).where(and(eq(registrations.eventId, eventId), isNull(registrations.deletedAt))),
     ]);
@@ -112,7 +113,7 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
       const [sold] = await this.database.select({ value: count() }).from(registrations).where(and(
         eq(registrations.lotId, lot.id),
         inArray(registrations.status, ["confirmada", "pendente", "aguardando_pagamento"]),
-        sql`(${registrations.status} = 'confirmada' or ${registrations.reservationExpiresAt} > ${at})`,
+        sql`(${registrations.status} = 'confirmada' or ${registrations.reservationExpiresAt} > ${atIso})`,
         isNull(registrations.deletedAt),
       ));
       return { id: lot.id, name: lot.name, priceCents: lot.priceCents, maxQuantity: lot.maxQuantity, soldCount: Number(sold?.value ?? 0), startAt: lot.startAt, endAt: lot.endAt, active: lot.active, sortOrder: lot.sortOrder };
