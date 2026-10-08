@@ -27,14 +27,17 @@ type ParseApiErrorParams = { payload: unknown; status: number };
 export class FetchHttpClient implements IHttpClient {
   private readonly fetcher: typeof fetch;
   constructor(dependencies: HttpClientDependencies = {}) {
-    this.fetcher = dependencies.fetcher ?? fetch;
+    const rawFetcher = dependencies.fetcher ?? (typeof window !== "undefined" ? window.fetch : fetch);
+    const target = typeof window !== "undefined" ? window : globalThis;
+    this.fetcher = rawFetcher.bind(target);
   }
   async request<T>(params: HttpRequestParams): Promise<HttpResponse<T>> {
     const url = buildRequestUrl({ path: params.path, query: params.query });
     const isMultipart = isFormData(params.body);
     const headers = params.body === undefined || isMultipart ? undefined : { "Content-Type": "application/json" };
     const body: BodyInit | undefined = params.body === undefined ? undefined : isFormData(params.body) ? params.body : JSON.stringify(params.body);
-    const response = await this.fetcher(url, { method: params.method, headers, body, cache: "no-store", credentials: "same-origin", signal: params.signal });
+    const fetcher = this.fetcher;
+    const response = await fetcher(url, { method: params.method, headers, body, cache: "no-store", credentials: "same-origin", signal: params.signal });
     const payload: unknown = await response.json().catch(() => null);
     if (!response.ok) throw parseApiError({ payload, status: response.status });
     if (!isRecord(payload) || !("data" in payload)) throw new ApiError({ code: "INVALID_API_RESPONSE", message: "Resposta inválida do servidor.", status: response.status });
