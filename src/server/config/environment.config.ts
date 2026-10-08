@@ -21,10 +21,14 @@ export type ApplicationEnvironment = {
   pagBankToken: string;
   pagBankPublicKey: string;
   pagBankWebhookSecret: string;
+  raroNexusApiUrl: string;
   raroNexusBaseUrl: string;
   raroNexusClientId: string;
   raroNexusClientSecret: string;
+  raroNexusSessionToken: string;
+  raroNexusEmailEndpoint: string;
   raroNexusRoleKeys: RoleEnvironmentKeys;
+  emailProvider: "raronexus" | "smtp";
   smtpHost: string;
   smtpPort: number;
   smtpSecure: boolean;
@@ -48,6 +52,11 @@ export type ApplicationEnvironment = {
 };
 
 export function readEnvironment(): ApplicationEnvironment {
+  const rawNexusUrl = process.env.RARONEXUS_API_URL || process.env.RARONEXUS_BASE_URL;
+  const raroNexusApiUrl = clean(rawNexusUrl, "");
+  const emailProviderEnv = process.env.EMAIL_PROVIDER?.toLowerCase().trim();
+  const emailProvider: "raronexus" | "smtp" = emailProviderEnv === "smtp" ? "smtp" : "raronexus";
+
   return {
     nodeEnvironment: process.env.NODE_ENV ?? "development",
     appBaseUrl: clean(process.env.APP_BASE_URL, "http://localhost:3000"),
@@ -62,9 +71,12 @@ export function readEnvironment(): ApplicationEnvironment {
     pagBankToken: process.env.PAGBANK_TOKEN ?? "",
     pagBankPublicKey: process.env.PAGBANK_PUBLIC_KEY ?? "",
     pagBankWebhookSecret: process.env.PAGBANK_WEBHOOK_SECRET ?? "",
-    raroNexusBaseUrl: clean(process.env.RARONEXUS_BASE_URL, ""),
+    raroNexusApiUrl,
+    raroNexusBaseUrl: raroNexusApiUrl,
     raroNexusClientId: process.env.RARONEXUS_CLIENT_ID ?? "",
     raroNexusClientSecret: process.env.RARONEXUS_CLIENT_SECRET ?? "",
+    raroNexusSessionToken: process.env.RARONEXUS_SESSION_TOKEN ?? "",
+    raroNexusEmailEndpoint: process.env.RARONEXUS_EMAIL_ENDPOINT ?? "",
     raroNexusRoleKeys: {
       administrador: process.env.RARONEXUS_ROLE_ADMIN ?? "administrador",
       gerente_evento: process.env.RARONEXUS_ROLE_EVENT_MANAGER ?? "gerente_evento",
@@ -73,6 +85,7 @@ export function readEnvironment(): ApplicationEnvironment {
       checkin: process.env.RARONEXUS_ROLE_CHECKIN ?? "checkin",
       consulta: process.env.RARONEXUS_ROLE_READONLY ?? "consulta",
     },
+    emailProvider,
     smtpHost: process.env.SMTP_HOST ?? "",
     smtpPort: parsePort(process.env.SMTP_PORT, 587),
     smtpSecure: process.env.SMTP_SECURE === "true",
@@ -103,8 +116,13 @@ export function isPlaceholder(value: string): boolean {
 
 export function isRaroNexusConfigured(): boolean {
   const environment = readEnvironment();
-  return [environment.raroNexusBaseUrl, environment.raroNexusClientId, environment.raroNexusClientSecret]
+  return [environment.raroNexusApiUrl, environment.raroNexusClientId, environment.raroNexusClientSecret]
     .every((value) => !isPlaceholder(value));
+}
+
+export function isSmtpConfigured(): boolean {
+  const environment = readEnvironment();
+  return !isPlaceholder(environment.smtpHost);
 }
 
 function parsePort(value: string | undefined, fallback: number): number {

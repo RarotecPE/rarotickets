@@ -39,7 +39,7 @@ import { DrizzleReportingRepository } from "@/modules/ticketing/server/infrastru
 import { SecureCredentialProvider } from "@/server/infrastructure/providers/secure-credential.provider";
 import { UuidIdGenerator } from "@/server/infrastructure/providers/id-generator.provider";
 import { getPaymentGateway } from "@/server/infrastructure/providers/payment-gateway.factory";
-import { SmtpNotificationProvider } from "@/server/infrastructure/providers/smtp-notification.provider";
+import { getEmailNotificationProvider } from "@/server/infrastructure/providers/email-notification-provider.factory";
 import { MetaWhatsAppNotificationProvider } from "@/server/infrastructure/providers/meta-whatsapp.notification.provider";
 import { getFileStorageProvider } from "@/server/infrastructure/providers/file-storage-provider.factory";
 import { getDatabase } from "@/server/infrastructure/persistence/database";
@@ -98,7 +98,7 @@ export function createTicketingContainer(): TicketingContainer {
   const environment = readEnvironment();
   const paymentGateway = getPaymentGateway();
   const fileStorageProvider = getFileStorageProvider();
-  const emailProvider = new SmtpNotificationProvider();
+  const emailProvider = getEmailNotificationProvider();
   const whatsappProvider = new MetaWhatsAppNotificationProvider();
   const processOutbox = new ProcessOutboxUseCase({
     outboxRepository,
