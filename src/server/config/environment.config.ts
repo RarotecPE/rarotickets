@@ -43,8 +43,16 @@ export type ApplicationEnvironment = {
   whatsappTemplateName: string;
   whatsappWaitlistTemplateName: string;
   whatsappTemplateLanguage: string;
-  storageDriver: "local" | "s3";
+  storageDriver: "local" | "s3" | "r2";
   storageLocalDirectory: string;
+  storageKeyPrefix: string;
+  publicStorageBaseUrl: string;
+  r2Endpoint: string;
+  r2Bucket: string;
+  r2ProjectFolder: string;
+  r2AccessKeyId: string;
+  r2SecretAccessKey: string;
+  r2BasePrefix: string;
   s3Endpoint: string;
   s3Region: string;
   s3Bucket: string;
@@ -105,15 +113,119 @@ export function readEnvironment(): ApplicationEnvironment {
     whatsappWaitlistTemplateName:
       process.env.WHATSAPP_WAITLIST_TEMPLATE_NAME ?? "",
     whatsappTemplateLanguage: process.env.WHATSAPP_TEMPLATE_LANGUAGE ?? "pt_BR",
-    storageDriver: process.env.STORAGE_DRIVER === "s3" ? "s3" : "local",
-    storageLocalDirectory: process.env.STORAGE_LOCAL_DIRECTORY ?? ".data/uploads",
-    s3Endpoint: process.env.S3_ENDPOINT ?? "",
-    s3Region: process.env.S3_REGION ?? "sa-east-1",
-    s3Bucket: process.env.S3_BUCKET ?? "",
-    s3AccessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
-    s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
-    s3PublicBaseUrl: process.env.S3_PUBLIC_BASE_URL ?? "",
+    ...parseStorageEnvironment(),
   };
+}
+
+function parseStorageEnvironment() {
+  const rawStorageDriver = cleanString(process.env.STORAGE_DRIVER).toLowerCase();
+  const r2Endpoint = cleanString(process.env.R2_ENDPOINT);
+  const r2Bucket = cleanString(process.env.R2_BUCKET);
+  const r2ProjectFolder = cleanString(
+    process.env.R2_PROJECT_FOLDER || process.env.R2_FOLDER,
+  );
+  const r2AccessKeyId = cleanString(process.env.R2_ACCESS_KEY_ID);
+  const r2SecretAccessKey = cleanString(process.env.R2_SECRET_ACCESS_KEY);
+  const r2BasePrefix = cleanString(process.env.R2_BASE_PREFIX);
+
+  const s3Endpoint = cleanString(process.env.S3_ENDPOINT);
+  const s3Region = cleanString(process.env.S3_REGION, "sa-east-1");
+  const s3Bucket = cleanString(process.env.S3_BUCKET);
+  const s3AccessKeyId = cleanString(process.env.S3_ACCESS_KEY_ID);
+  const s3SecretAccessKey = cleanString(process.env.S3_SECRET_ACCESS_KEY);
+  const s3PublicBaseUrl = cleanString(process.env.S3_PUBLIC_BASE_URL);
+
+  const hasR2 = Boolean(r2Bucket || r2Endpoint);
+  const hasS3 = Boolean(s3Bucket || s3Endpoint);
+
+  let storageDriver: "local" | "s3" | "r2";
+  if (rawStorageDriver === "r2") {
+    storageDriver = "r2";
+  } else if (rawStorageDriver === "s3") {
+    storageDriver = "s3";
+  } else if (rawStorageDriver === "local") {
+    storageDriver = "local";
+  } else if (hasR2) {
+    storageDriver = "r2";
+  } else if (hasS3) {
+    storageDriver = "s3";
+  } else {
+    storageDriver = "local";
+  }
+
+  const { keyPrefix: storageKeyPrefix, publicBaseUrl: publicStorageBaseUrl } =
+    parseStoragePrefix(r2ProjectFolder, r2BasePrefix, s3PublicBaseUrl);
+
+  let normalizedR2Endpoint = r2Endpoint.replace(/\/+$/, "");
+  if (normalizedR2Endpoint && r2Bucket && normalizedR2Endpoint.endsWith(`/${r2Bucket}`)) {
+    normalizedR2Endpoint = normalizedR2Endpoint.slice(0, -(r2Bucket.length + 1)).replace(/\/+$/, "");
+  }
+
+  return {
+    storageDriver,
+    storageLocalDirectory: cleanString(process.env.STORAGE_LOCAL_DIRECTORY, ".data/uploads"),
+    storageKeyPrefix,
+    publicStorageBaseUrl,
+    r2Endpoint: normalizedR2Endpoint,
+    r2Bucket,
+    r2ProjectFolder,
+    r2AccessKeyId,
+    r2SecretAccessKey,
+    r2BasePrefix,
+    s3Endpoint,
+    s3Region,
+    s3Bucket,
+    s3AccessKeyId,
+    s3SecretAccessKey,
+    s3PublicBaseUrl,
+  };
+}
+
+function parseStoragePrefix(
+  projectFolder: string,
+  prefixRaw: string,
+  publicUrlFallback: string,
+): {
+  keyPrefix: string;
+  publicBaseUrl: string;
+} {
+  const cleanProjectFolder = projectFolder.trim().replace(/^\/+|\/+$/g, "");
+  const trimmed = prefixRaw.trim();
+
+  let keyPrefix = cleanProjectFolder;
+  let publicBaseUrl = publicUrlFallback ? publicUrlFallback.replace(/\/+$/, "") : "";
+
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    try {
+      const parsedUrl = new URL(trimmed);
+      const pathname = parsedUrl.pathname.replace(/^\/+|\/+$/g, "");
+      publicBaseUrl = trimmed.replace(/\/+$/, "");
+      if (!keyPrefix && pathname) {
+        keyPrefix = pathname;
+      }
+    } catch {
+      publicBaseUrl = trimmed.replace(/\/+$/, "");
+    }
+  } else if (trimmed && !keyPrefix) {
+    keyPrefix = trimmed.replace(/^\/+|\/+$/g, "");
+  }
+
+  return {
+    keyPrefix,
+    publicBaseUrl,
+  };
+}
+
+function cleanString(value: string | undefined, fallback = ""): string {
+  if (!value) return fallback;
+  let str = value.trim();
+  if (
+    (str.startsWith('"') && str.endsWith('"')) ||
+    (str.startsWith("'") && str.endsWith("'"))
+  ) {
+    str = str.slice(1, -1).trim();
+  }
+  return str || fallback;
 }
 
 export function isPlaceholder(value: string): boolean {
