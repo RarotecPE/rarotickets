@@ -48,20 +48,20 @@ describe("RaroNexusNotificationProvider", () => {
     await provider.send(params);
 
     expect(mockEmailClient.send).toHaveBeenCalledTimes(1);
-    expect(capturedOptions.to).toBe("participante@evento.com");
-    expect(capturedOptions.subject).toBe("Sua inscrição foi confirmada!");
-    expect(capturedOptions.metadata).toEqual({
+    expect(capturedOptions!.to).toBe("participante@evento.com");
+    expect(capturedOptions!.subject).toBe("Sua inscrição foi confirmada!");
+    expect(capturedOptions!.metadata).toEqual({
       outboxId: "msg-outbox-1",
       template: "registration-confirmed",
       channel: "email",
       registrationCode: "INS-2026-TS01",
     });
     // Verifica que o body contém o nome, o evento e o código da inscrição
-    expect(capturedOptions.body).toContain("Maria Silva");
-    expect(capturedOptions.body).toContain("Workshop de TypeScript");
-    expect(capturedOptions.body).toContain("INS-2026-TS01");
+    expect(capturedOptions!.body).toContain("Maria Silva");
+    expect(capturedOptions!.body).toContain("Workshop de TypeScript");
+    expect(capturedOptions!.body).toContain("INS-2026-TS01");
     // Não deve conter a tag de documento html externo completa pois vai dentro de {{body}} do Nexus
-    expect(capturedOptions.body).not.toContain("<!doctype html>");
+    expect(capturedOptions!.body).not.toContain("<!doctype html>");
   });
 });
 

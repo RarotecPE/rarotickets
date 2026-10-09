@@ -48,10 +48,10 @@ describe("RaroNexusEmailClient", () => {
     expect(capturedHeaders["X-RaroNexus-Client-Secret"]).toBe("client-test-secret");
     expect(capturedHeaders["Content-Type"]).toBe("application/json");
     // Subject deve ter tags HTML removidas
-    expect(capturedBody.subject).toBe("Confirmação da Inscrição");
-    expect(capturedBody.to).toBe("participante@teste.com");
-    expect(capturedBody.body).toBe("<p>Seu ingresso está pronto!</p>");
-    expect(capturedBody.metadata).toEqual({ eventoId: "evt-10" });
+    expect(capturedBody!.subject).toBe("Confirmação da Inscrição");
+    expect(capturedBody!.to).toBe("participante@teste.com");
+    expect(capturedBody!.body).toBe("<p>Seu ingresso está pronto!</p>");
+    expect(capturedBody!.metadata).toEqual({ eventoId: "evt-10" });
     expect(result).toEqual({ sent: true, messageId: "<msg-123@nexus.local>" });
   });
 

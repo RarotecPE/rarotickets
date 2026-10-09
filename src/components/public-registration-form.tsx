@@ -2,10 +2,11 @@
 
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRight, CheckCircle2, Clock3, FileUp, LoaderCircle, TicketCheck } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Clock3, FileUp, LoaderCircle, LogIn, TicketCheck, UserCheck, UserPlus } from "lucide-react";
 import { ApiError } from "@/client/services/api-service.base";
 import { ticketingApi } from "@/client/services/ticketing-api.service";
 import type { PublicRegistrationResult } from "@/client/services/ticketing-api.service";
+import { useParticipantAuth } from "@/components/participant-auth-provider";
 import { Badge, Button, Field, InlineAlert, Panel, PanelHeader, inputCls, selectCls, textareaCls } from "@/components/ui";
 import { Cpf } from "@/modules/ticketing/domain/participants/value-objects/cpf.vo";
 import { Email } from "@/modules/ticketing/domain/participants/value-objects/email.vo";
@@ -23,13 +24,13 @@ type CreateRegistrationParams = { event: EventReadModel; participant: Participan
 type CustomRegistrationFieldProps = { field: EventReadModel["formFields"][number]; value: unknown; file?: File; error?: string; onChange: (value: unknown) => void; onFileChange: (file: File | undefined) => void };
 
 const registrationFormValidator = new RegistrationFormDomainService();
-const EMPTY_PARTICIPANT: ParticipantFormState = { name: "", cpf: "", email: "", phone: "", birthDate: "", company: "", jobTitle: "" };
 const CUSTOM_INPUT_CLASS = `${inputCls} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-primary`;
 const CUSTOM_TEXTAREA_CLASS = `${textareaCls} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-primary`;
 const FILE_ACCEPT = ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
 
 export function PublicRegistrationForm({ event }: PublicRegistrationFormProps) {
-  const [participant, setParticipant] = useState<ParticipantFormState>(EMPTY_PARTICIPANT);
+  const { participant: authParticipant, isAuthenticated, isLoading: authLoading } = useParticipantAuth();
+  const [participantOverrides, setParticipantOverrides] = useState<Partial<ParticipantFormState>>({});
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [files, setFiles] = useState<Record<string, File>>({});
   const [lotId, setLotId] = useState("");
@@ -42,6 +43,16 @@ export function PublicRegistrationForm({ event }: PublicRegistrationFormProps) {
   const [created, setCreated] = useState<PublicRegistrationResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(() => new Date());
+
+  const participant: ParticipantFormState = {
+    name: participantOverrides.name ?? authParticipant?.name ?? "",
+    email: participantOverrides.email ?? authParticipant?.email ?? "",
+    cpf: participantOverrides.cpf ?? authParticipant?.cpf ?? "",
+    phone: participantOverrides.phone ?? authParticipant?.phone ?? "",
+    birthDate: participantOverrides.birthDate ?? "",
+    company: participantOverrides.company ?? "",
+    jobTitle: participantOverrides.jobTitle ?? "",
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
@@ -58,7 +69,7 @@ export function PublicRegistrationForm({ event }: PublicRegistrationFormProps) {
   const requiresLot = event.props.chargeType === "pago" && !isWaitlist;
 
   function updateParticipant<K extends keyof ParticipantFormState>(field: K, value: ParticipantFormState[K]): void {
-    setParticipant((current) => ({ ...current, [field]: value }));
+    setParticipantOverrides((current) => ({ ...current, [field]: value }));
   }
 
   function updateAnswer(fieldId: string, value: unknown): void {
@@ -104,11 +115,32 @@ export function PublicRegistrationForm({ event }: PublicRegistrationFormProps) {
   if (remaining === 0 && !event.props.allowsWaitlist) return <Panel><PanelHeader title="Inscrições indisponíveis" /><div className="p-4"><InlineAlert tone="danger">As vagas deste evento se esgotaram e não há lista de espera.</InlineAlert></div></Panel>;
   if (requiresLot && availableLots.length === 0) return <Panel><PanelHeader title="Lotes indisponíveis" /><div className="p-4"><InlineAlert>Não há lotes com vagas disponíveis neste momento. Tente novamente mais tarde.</InlineAlert></div></Panel>;
 
+  if (!authLoading && !isAuthenticated) {
+    return <Panel>
+      <PanelHeader title={isWaitlist ? "Entrar na lista de espera" : "Inscrição no evento"} description="Para participar dos eventos, é obrigatório estar cadastrado e conectado." />
+      <div className="space-y-4 p-4 sm:p-5">
+        <InlineAlert tone="info">Para garantir sua vaga e acessar sua credencial, você precisa estar conectado à sua conta de participante.</InlineAlert>
+        <div className="space-y-2 pt-2">
+          <Link href={`/participante/cadastro?redirect=/eventos/${encodeURIComponent(event.props.slug)}`} className="flex h-10 w-full items-center justify-center gap-2 rounded-app-md bg-app-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:brightness-110">
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
+            Cadastre-se para se inscrever
+          </Link>
+          <Link href={`/participante/login?redirect=/eventos/${encodeURIComponent(event.props.slug)}`} className="flex h-10 w-full items-center justify-center gap-2 rounded-app-md border border-app-border bg-app-surface-elevated px-4 text-sm font-semibold text-app-foreground transition hover:bg-app-surface">
+            <LogIn className="h-4 w-4" aria-hidden="true" />
+            Já possui cadastro? Fazer login
+          </Link>
+        </div>
+        <p className="text-center text-xs text-app-muted-foreground">O cadastro leva menos de um minuto e é gratuito.</p>
+      </div>
+    </Panel>;
+  }
+
   return <Panel>
     <PanelHeader title={isWaitlist ? "Entrar na lista de espera" : "Faça sua inscrição"} description={isWaitlist ? "Sua inscrição não gera cobrança enquanto aguarda uma vaga." : "Preencha seus dados para reservar sua vaga."} />
     <form onSubmit={(formEvent) => void submitRegistration(formEvent)} className="space-y-5 p-4 sm:p-5" noValidate>
       {generalError ? <InlineAlert tone="danger">{generalError}</InlineAlert> : null}
       {isWaitlist ? <InlineAlert>O evento está no limite de capacidade. Você pode solicitar uma vaga na lista de espera.</InlineAlert> : null}
+      {authParticipant ? <div className="flex items-center gap-2 rounded-app-md border border-app-border bg-app-surface-elevated/60 px-3 py-2 text-xs text-app-muted-foreground"><UserCheck className="h-4 w-4 text-app-primary" aria-hidden="true" /><span>Conectado como <strong className="text-app-foreground">{authParticipant.name}</strong> ({authParticipant.email})</span></div> : null}
       <section className="space-y-3"><h3 className="text-xs font-bold uppercase tracking-wide text-app-muted-foreground">Dados da pessoa participante</h3>
         <Field label="Nome completo *" htmlFor="participant-name" error={participantErrors.name}><input id="participant-name" autoComplete="name" value={participant.name} onChange={(change) => updateParticipant("name", change.target.value)} className={CUSTOM_INPUT_CLASS} aria-invalid={Boolean(participantErrors.name)} aria-describedby={participantErrors.name ? "participant-name-error" : undefined} /></Field>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

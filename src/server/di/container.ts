@@ -41,6 +41,15 @@ import { UuidIdGenerator } from "@/server/infrastructure/providers/id-generator.
 import { getPaymentGateway } from "@/server/infrastructure/providers/payment-gateway.factory";
 import { getEmailNotificationProvider } from "@/server/infrastructure/providers/email-notification-provider.factory";
 import { MetaWhatsAppNotificationProvider } from "@/server/infrastructure/providers/meta-whatsapp.notification.provider";
+import { RequestParticipantRegistrationUseCase } from "@/modules/ticketing/application/use-cases/request-participant-registration/request-participant-registration.use-case";
+import { GetActivationTokenInfoUseCase } from "@/modules/ticketing/application/use-cases/get-activation-token-info/get-activation-token-info.use-case";
+import { CompleteParticipantRegistrationUseCase } from "@/modules/ticketing/application/use-cases/complete-participant-registration/complete-participant-registration.use-case";
+import { ParticipantLoginWithPasswordUseCase } from "@/modules/ticketing/application/use-cases/participant-login-with-password/participant-login-with-password.use-case";
+import { RequestParticipantOtpUseCase } from "@/modules/ticketing/application/use-cases/request-participant-otp/request-participant-otp.use-case";
+import { VerifyParticipantOtpUseCase } from "@/modules/ticketing/application/use-cases/verify-participant-otp/verify-participant-otp.use-case";
+import { GetParticipantEventsUseCase } from "@/modules/ticketing/application/use-cases/get-participant-events/get-participant-events.use-case";
+import { DrizzleParticipantAuthRepository } from "@/server/infrastructure/persistence/repositories/drizzle-participant-auth.repository.impl";
+import { ParticipantEmailProvider } from "@/server/infrastructure/providers/participant-email.provider";
 import { getFileStorageProvider } from "@/server/infrastructure/providers/file-storage-provider.factory";
 import { getDatabase } from "@/server/infrastructure/persistence/database";
 import { readEnvironment } from "@/server/config/environment.config";
@@ -73,6 +82,14 @@ export type TicketingContainer = {
   promoteWaitlist: PromoteWaitlistUseCase;
   runMaintenance: RunMaintenanceUseCase;
   paymentGateway: IPaymentGateway;
+  requestParticipantRegistration: RequestParticipantRegistrationUseCase;
+  getActivationTokenInfo: GetActivationTokenInfoUseCase;
+  completeParticipantRegistration: CompleteParticipantRegistrationUseCase;
+  participantLoginWithPassword: ParticipantLoginWithPasswordUseCase;
+  requestParticipantOtp: RequestParticipantOtpUseCase;
+  verifyParticipantOtp: VerifyParticipantOtpUseCase;
+  getParticipantEvents: GetParticipantEventsUseCase;
+  participantAuthRepository: DrizzleParticipantAuthRepository;
   eventRepository: DrizzleEventRepository;
   registrationRepository: DrizzleRegistrationRepository;
   auditRepository: DrizzleAuditRepository;
@@ -117,6 +134,34 @@ export function createTicketingContainer(): TicketingContainer {
     registrationRepository,
     promoteWaitlist,
     processOutbox,
+  });
+  const participantAuthRepository = new DrizzleParticipantAuthRepository({
+    database,
+  });
+  const participantEmailSender = new ParticipantEmailProvider();
+  const requestParticipantRegistration = new RequestParticipantRegistrationUseCase({
+    participantAuthRepository,
+    emailSender: participantEmailSender,
+    publicBaseUrl: environment.appBaseUrl,
+  });
+  const getActivationTokenInfo = new GetActivationTokenInfoUseCase({
+    participantAuthRepository,
+  });
+  const completeParticipantRegistration = new CompleteParticipantRegistrationUseCase({
+    participantAuthRepository,
+  });
+  const participantLoginWithPassword = new ParticipantLoginWithPasswordUseCase({
+    participantAuthRepository,
+  });
+  const requestParticipantOtp = new RequestParticipantOtpUseCase({
+    participantAuthRepository,
+    emailSender: participantEmailSender,
+  });
+  const verifyParticipantOtp = new VerifyParticipantOtpUseCase({
+    participantAuthRepository,
+  });
+  const getParticipantEvents = new GetParticipantEventsUseCase({
+    participantAuthRepository,
   });
   return {
     listPublicEvents: new ListPublicEventsUseCase({ eventRepository }),
@@ -200,6 +245,14 @@ export function createTicketingContainer(): TicketingContainer {
     promoteWaitlist,
     runMaintenance,
     paymentGateway,
+    requestParticipantRegistration,
+    getActivationTokenInfo,
+    completeParticipantRegistration,
+    participantLoginWithPassword,
+    requestParticipantOtp,
+    verifyParticipantOtp,
+    getParticipantEvents,
+    participantAuthRepository,
     eventRepository,
     registrationRepository,
     auditRepository,

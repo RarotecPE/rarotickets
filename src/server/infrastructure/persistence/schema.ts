@@ -124,12 +124,31 @@ export const participants = pgTable("participants", {
   jobTitle: varchar("job_title", { length: 140 }),
   termsConsent: boolean("terms_consent").default(false).notNull(),
   marketingConsent: boolean("marketing_consent").default(false).notNull(),
+  passwordHash: text("password_hash"),
+  status: varchar("status", { length: 32 }).default("ativo").notNull(),
   deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [
   uniqueIndex("participants_email_active_unique").on(table.email).where(sql`${table.deletedAt} IS NULL`),
   uniqueIndex("participants_cpf_active_unique").on(table.cpf).where(sql`${table.cpf} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+]);
+
+export const participantAuthTokens = pgTable("participant_auth_tokens", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  participantId: uuid("participant_id").references(() => participants.id),
+  type: varchar("type", { length: 32 }).notNull(),
+  email: varchar("email", { length: 254 }).notNull(),
+  cpf: varchar("cpf", { length: 11 }),
+  tokenHash: varchar("token_hash", { length: 128 }).notNull(),
+  code: varchar("code", { length: 12 }),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true, mode: "date" }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  uniqueIndex("participant_auth_tokens_hash_unique").on(table.tokenHash),
+  index("participant_auth_tokens_lookup_idx").on(table.type, table.email, table.expiresAt),
 ]);
 
 export const coupons = pgTable("coupons", {
@@ -298,5 +317,8 @@ export const registrationFiles = pgTable("registration_files", {
 export type EventRow = typeof events.$inferSelect;
 export type NewEventRow = typeof events.$inferInsert;
 export type ParticipantRow = typeof participants.$inferSelect;
+export type NewParticipantRow = typeof participants.$inferInsert;
+export type ParticipantAuthTokenRow = typeof participantAuthTokens.$inferSelect;
+export type NewParticipantAuthTokenRow = typeof participantAuthTokens.$inferInsert;
 export type RegistrationRow = typeof registrations.$inferSelect;
 export type PaymentRow = typeof payments.$inferSelect;
