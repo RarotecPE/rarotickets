@@ -100,14 +100,62 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
       }
 
       if (params.lots !== undefined) {
-        const [regCount] = await transaction
-          .select({ value: count() })
-          .from(registrations)
-          .where(and(eq(registrations.eventId, params.eventId), isNull(registrations.deletedAt)));
-        if (Number(regCount?.value ?? 0) === 0) {
-          await transaction.delete(ticketLots).where(eq(ticketLots.eventId, params.eventId));
-          if (params.lots.length) {
-            await transaction.insert(ticketLots).values(params.lots.map((lot) => ({ ...lot, eventId: params.eventId })));
+        const existingLots = await transaction
+          .select()
+          .from(ticketLots)
+          .where(eq(ticketLots.eventId, params.eventId))
+          .orderBy(asc(ticketLots.sortOrder), asc(ticketLots.startAt));
+        const matchedLotIds = new Set<string>();
+
+        for (let index = 0; index < params.lots.length; index += 1) {
+          const lot = params.lots[index];
+          const existingById = existingLots.find(
+            (item) => item.id === lot.id && !matchedLotIds.has(item.id),
+          );
+          const fallbackByIndex =
+            !existingById &&
+            existingLots[index] &&
+            !matchedLotIds.has(existingLots[index].id)
+              ? existingLots[index]
+              : undefined;
+          const existingLot = existingById ?? fallbackByIndex;
+
+          if (existingLot) {
+            matchedLotIds.add(existingLot.id);
+            await transaction
+              .update(ticketLots)
+              .set({
+                name: lot.name,
+                priceCents: lot.priceCents,
+                maxQuantity: lot.maxQuantity,
+                startAt: lot.startAt,
+                endAt: lot.endAt,
+                active: lot.active,
+                sortOrder: lot.sortOrder,
+              })
+              .where(eq(ticketLots.id, existingLot.id));
+          } else {
+            await transaction
+              .insert(ticketLots)
+              .values({ ...lot, eventId: params.eventId });
+          }
+        }
+
+        for (const existingLot of existingLots) {
+          if (matchedLotIds.has(existingLot.id)) continue;
+          const [referenced] = await transaction
+            .select({ value: count() })
+            .from(registrations)
+            .where(eq(registrations.lotId, existingLot.id));
+          if (Number(referenced?.value ?? 0) === 0) {
+            await transaction
+              .delete(ticketLots)
+              .where(eq(ticketLots.id, existingLot.id));
+          } else {
+            await transaction
+              .update(ticketLots)
+              .set({ active: false })
+              .where(eq(ticketLots.id, existingLot.id));
           }
         }
       }

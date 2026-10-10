@@ -7,6 +7,7 @@ import type { ICredentialProvider } from "@/modules/ticketing/domain/services/cr
 import type { IOutboxRepository } from "@/modules/ticketing/domain/repositories/outbox-repository.interface";
 import type { IAuditRepository } from "@/modules/ticketing/domain/repositories/audit-repository.interface";
 import type { IParticipantEmailSender } from "@/modules/ticketing/domain/services/participant-email-sender.interface";
+import type { PromoteWaitlistUseCase } from "@/modules/ticketing/application/use-cases/promote-waitlist/promote-waitlist.use-case";
 
 export type ProcessPaymentWebhookInputDto = { webhook: PaymentWebhook; provider: "pagbank" | "mock" };
 export type ProcessPaymentWebhookOutputDto = PaymentWebhookUpdateResult;
@@ -16,6 +17,7 @@ export type ProcessPaymentWebhookDependencies = {
   outboxRepository: IOutboxRepository;
   auditRepository: IAuditRepository;
   emailSender?: IParticipantEmailSender;
+  promoteWaitlist?: PromoteWaitlistUseCase;
   publicBaseUrl: string;
 };
 
@@ -25,6 +27,7 @@ export class ProcessPaymentWebhookUseCase extends UseCase<ProcessPaymentWebhookI
   private readonly outboxRepository: IOutboxRepository;
   private readonly auditRepository: IAuditRepository;
   private readonly emailSender?: IParticipantEmailSender;
+  private readonly promoteWaitlist?: PromoteWaitlistUseCase;
   private readonly publicBaseUrl: string;
 
   constructor(dependencies: ProcessPaymentWebhookDependencies) {
@@ -34,6 +37,7 @@ export class ProcessPaymentWebhookUseCase extends UseCase<ProcessPaymentWebhookI
     this.outboxRepository = dependencies.outboxRepository;
     this.auditRepository = dependencies.auditRepository;
     this.emailSender = dependencies.emailSender;
+    this.promoteWaitlist = dependencies.promoteWaitlist;
     this.publicBaseUrl = dependencies.publicBaseUrl.replace(/\/$/, "");
   }
 
@@ -56,6 +60,21 @@ export class ProcessPaymentWebhookUseCase extends UseCase<ProcessPaymentWebhookI
         externalId: webhook.externalId,
         paidAt: confirmedAt,
       });
+    }
+    if (result.status === "cancelada" && !result.duplicate && this.promoteWaitlist) {
+      try {
+        const waitlistedEventIds =
+          await this.registrationRepository.listWaitlistedEventIds();
+        for (const waitlistedEventId of waitlistedEventIds) {
+          await this.promoteWaitlist.execute({
+            eventId: waitlistedEventId,
+            at: confirmedAt,
+            maxPromotions: 1,
+          });
+        }
+      } catch {
+        // Fallback para rotina de manutenção
+      }
     }
     if (!result.duplicate && result.registrationCode) {
       await this.auditRepository.write({ userId: "system:payment-webhook", userName: "PagBank webhook", action: "payment.status_updated", entity: "registration", recordId: result.registrationCode, beforeData: null, afterData: { status: result.status, provider: input.provider, refundRequired: result.refundRequired }, ip: null });

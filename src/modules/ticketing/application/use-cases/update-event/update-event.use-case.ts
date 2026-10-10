@@ -13,6 +13,10 @@ import type {
 } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
 import type { IAuditRepository } from "@/modules/ticketing/domain/repositories/audit-repository.interface";
 import { EventSlug } from "@/modules/ticketing/domain/events/value-objects/event-slug.vo";
+import type { PromoteWaitlistUseCase } from "@/modules/ticketing/application/use-cases/promote-waitlist/promote-waitlist.use-case";
+import type { ProcessOutboxUseCase } from "@/modules/ticketing/application/use-cases/process-outbox/process-outbox.use-case";
+
+const MAX_WAITLIST_PROMOTIONS_ON_UPDATE = 100;
 
 export type EventEditableProps = Omit<EventProps, "status" | "createdByGlobalUserId" | "deletedAt">;
 export type UpdateEventLotDraft = Omit<NewEventLot, "id"> & { id?: string };
@@ -35,18 +39,24 @@ export type UpdateEventDependencies = {
   eventRepository: EventRepository;
   auditRepository: IAuditRepository;
   idGenerator?: IIdGenerator;
+  promoteWaitlist?: PromoteWaitlistUseCase;
+  processOutbox?: ProcessOutboxUseCase;
 };
 
 export class UpdateEventUseCase extends UseCase<UpdateEventInputDto, UpdateEventOutputDto> {
   private readonly eventRepository: EventRepository;
   private readonly auditRepository: IAuditRepository;
   private readonly idGenerator?: IIdGenerator;
+  private readonly promoteWaitlist?: PromoteWaitlistUseCase;
+  private readonly processOutbox?: ProcessOutboxUseCase;
 
   constructor(dependencies: UpdateEventDependencies) {
     super();
     this.eventRepository = dependencies.eventRepository;
     this.auditRepository = dependencies.auditRepository;
     this.idGenerator = dependencies.idGenerator;
+    this.promoteWaitlist = dependencies.promoteWaitlist;
+    this.processOutbox = dependencies.processOutbox;
   }
 
   async execute(input: UpdateEventInputDto): Promise<Result<UpdateEventOutputDto>> {
@@ -89,6 +99,33 @@ export class UpdateEventUseCase extends UseCase<UpdateEventInputDto, UpdateEvent
       ...lot,
       id: lot.id || nextId(),
     }));
+
+    if (
+      input.props.chargeType === "pago" &&
+      input.props.maxCapacity > current.props.maxCapacity &&
+      lots &&
+      lots.length > 0
+    ) {
+      const totalActiveLotCapacity = lots
+        .filter((lot) => lot.active)
+        .reduce((sum, lot) => sum + lot.maxQuantity, 0);
+      if (totalActiveLotCapacity < input.props.maxCapacity) {
+        const missingCapacity = input.props.maxCapacity - totalActiveLotCapacity;
+        let targetIndex = -1;
+        for (let i = lots.length - 1; i >= 0; i -= 1) {
+          if (lots[i].active) {
+            targetIndex = i;
+            break;
+          }
+        }
+        const indexToUpdate = targetIndex >= 0 ? targetIndex : lots.length - 1;
+        lots[indexToUpdate] = {
+          ...lots[indexToUpdate],
+          maxQuantity: lots[indexToUpdate].maxQuantity + missingCapacity,
+        };
+      }
+    }
+
     const fields: NewEventField[] | undefined = input.fields?.map((field) => ({
       ...field,
       id: field.id || nextId(),
@@ -116,10 +153,43 @@ export class UpdateEventUseCase extends UseCase<UpdateEventInputDto, UpdateEvent
       action: "event.updated",
       entity: "event",
       recordId: input.eventId,
-      beforeData: { title: current.props.title, summary: current.props.summary },
-      afterData: { title: updated.props.title, summary: updated.props.summary },
+      beforeData: {
+        title: current.props.title,
+        summary: current.props.summary,
+        maxCapacity: current.props.maxCapacity,
+      },
+      afterData: {
+        title: updated.props.title,
+        summary: updated.props.summary,
+        maxCapacity: updated.props.maxCapacity,
+      },
       ip: input.ip,
     });
+
+    if (this.promoteWaitlist && updated.capacity.waitlisted > 0) {
+      try {
+        const promotion = await this.promoteWaitlist.execute({
+          eventId: input.eventId,
+          at: updatedAt,
+          maxPromotions: MAX_WAITLIST_PROMOTIONS_ON_UPDATE,
+        });
+        if (promotion.isSuccess && promotion.value.promotedCount > 0) {
+          try {
+            await this.processOutbox?.execute({ limit: 25 });
+          } catch {
+            // O envio imediato do outbox não deve impedir o retorno da atualização do evento.
+          }
+          const refreshed = await this.eventRepository.getManagedById({
+            id: input.eventId,
+            userId: input.userId,
+            canViewAll: input.canViewAll,
+          });
+          if (refreshed) return Result.ok(refreshed);
+        }
+      } catch {
+        // Caso ocorra falha transitória na promoção imediata, a rotina de manutenção processará a fila.
+      }
+    }
 
     return Result.ok(updated);
   }

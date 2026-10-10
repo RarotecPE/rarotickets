@@ -9,9 +9,9 @@ import type { IAuditRepository } from "@/modules/ticketing/domain/repositories/a
 import { EventSlug } from "@/modules/ticketing/domain/events/value-objects/event-slug.vo";
 import { EventConfigurationDomainService } from "@/modules/ticketing/domain/events/services/event-configuration.domain-service";
 
-export type EventLotDraft = Omit<NewEventLot, "id">;
-export type EventFieldDraft = Omit<NewEventField, "id">;
-export type EventActivityDraft = Omit<NewEventActivity, "id">;
+export type EventLotDraft = Omit<NewEventLot, "id"> & { id?: string };
+export type EventFieldDraft = Omit<NewEventField, "id"> & { id?: string };
+export type EventActivityDraft = Omit<NewEventActivity, "id"> & { id?: string };
 
 export type CreateEventInputDto = {
   title: string;

@@ -103,5 +103,104 @@ describe("ParticipantEmailProvider", () => {
         "https://cdn.rarotickets.com.br/rarotickets/public/credentials/qr-RT-2026-ABCD12.png",
     });
   });
+
+  it("envia e-mail de promoção da lista de espera para pendente em evento pago com prazo e valor", async () => {
+    let capturedOptions: SendEmailOptions | null = null;
+    const mockClient = {
+      send: vi.fn().mockImplementation((options: SendEmailOptions) => {
+        capturedOptions = options;
+        return Promise.resolve({ sent: true, messageId: "msg-waitlist-paid" });
+      }),
+    } as unknown as RaroNexusEmailClient;
+
+    const mockFileStorage = {
+      storePublic: vi.fn(),
+      storePrivate: vi.fn(),
+      read: vi.fn(),
+      delete: vi.fn(),
+    } as unknown as IFileStorageProvider;
+
+    const provider = new ParticipantEmailProvider(mockClient, mockFileStorage);
+
+    await provider.sendWaitlistPromotedEmail({
+      email: "fila@teste.com",
+      participantName: "Maria Oliveira",
+      registrationCode: "RT-2026-WAIT01",
+      eventTitle: "Summit Arquitetura 2026",
+      eventStartAt: new Date("2026-12-01T12:00:00.000Z"),
+      modality: "presencial",
+      location: "Belo Horizonte, MG",
+      lotName: "2º Lote",
+      status: "pendente",
+      amountCents: 18000,
+      waitlistExpiresAt: new Date("2026-10-11T15:00:00.000Z"),
+      participantUrl: "http://localhost:3005/ingressos/token-fila-1",
+    });
+
+    expect(mockFileStorage.storePublic).not.toHaveBeenCalled();
+    expect(mockClient.send).toHaveBeenCalledTimes(1);
+    expect(capturedOptions).not.toBeNull();
+    expect(capturedOptions!.to).toBe("fila@teste.com");
+    expect(capturedOptions!.subject).toContain("Vaga liberada na lista de espera");
+    expect(capturedOptions!.subject).toContain("Summit Arquitetura 2026");
+    expect(capturedOptions!.body).toContain("Maria Oliveira");
+    expect(capturedOptions!.body).toContain("Pendente (Aguardando pagamento)");
+    expect(capturedOptions!.body).toContain("Acessar Inscrição e Realizar Pagamento");
+    expect(capturedOptions!.attachments).toBeUndefined();
+  });
+
+  it("envia e-mail de promoção da lista de espera para confirmada em evento gratuito com QR Code", async () => {
+    let capturedOptions: SendEmailOptions | null = null;
+    const mockClient = {
+      send: vi.fn().mockImplementation((options: SendEmailOptions) => {
+        capturedOptions = options;
+        return Promise.resolve({ sent: true, messageId: "msg-waitlist-free" });
+      }),
+    } as unknown as RaroNexusEmailClient;
+
+    const mockFileStorage = {
+      storePublic: vi
+        .fn()
+        .mockResolvedValue(
+          "https://cdn.rarotickets.com.br/rarotickets/public/credentials/qr-RT-2026-FREE01.png",
+        ),
+      storePrivate: vi.fn(),
+      read: vi.fn(),
+      delete: vi.fn(),
+    } as unknown as IFileStorageProvider;
+
+    const provider = new ParticipantEmailProvider(mockClient, mockFileStorage);
+
+    await provider.sendWaitlistPromotedEmail({
+      email: "gratis@teste.com",
+      participantName: "Carlos Souza",
+      registrationCode: "RT-2026-FREE01",
+      eventTitle: "Meetup Open Source",
+      eventStartAt: new Date("2026-12-05T22:00:00.000Z"),
+      modality: "online",
+      onlineUrl: "https://meet.rarotickets.com.br/sala-1",
+      status: "confirmada",
+      amountCents: 0,
+      qrPayload: "RARO-QR.free.signature",
+      participantUrl: "http://localhost:3005/ingressos/token-free-1",
+    });
+
+    expect(mockFileStorage.storePublic).toHaveBeenCalledTimes(1);
+    expect(mockClient.send).toHaveBeenCalledTimes(1);
+    expect(capturedOptions).not.toBeNull();
+    expect(capturedOptions!.to).toBe("gratis@teste.com");
+    expect(capturedOptions!.subject).toContain(
+      "Vaga liberada e inscrição confirmada",
+    );
+    expect(capturedOptions!.body).toContain("Carlos Souza");
+    expect(capturedOptions!.body).toContain("Gratuito");
+    expect(capturedOptions!.body).toContain(
+      'src="https://cdn.rarotickets.com.br/rarotickets/public/credentials/qr-RT-2026-FREE01.png"',
+    );
+    expect(capturedOptions!.attachments).toHaveLength(1);
+    expect(capturedOptions!.attachments![0].filename).toBe(
+      "credencial-RT-2026-FREE01.png",
+    );
+  });
 });
 

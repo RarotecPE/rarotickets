@@ -661,7 +661,14 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
 
   async list(params: ListRegistrationsParams): Promise<RegistrationListResult> {
     const filters = [isNull(registrations.deletedAt)];
-    if (params.eventId) filters.push(eq(registrations.eventId, params.eventId));
+    const eventIds = (
+      params.eventIds ?? (params.eventId ? [params.eventId] : [])
+    ).filter(Boolean);
+    if (eventIds.length === 1) {
+      filters.push(eq(registrations.eventId, eventIds[0]));
+    } else if (eventIds.length > 1) {
+      filters.push(inArray(registrations.eventId, eventIds));
+    }
     if (!params.canViewAll)
       filters.push(eq(events.createdByGlobalUserId, params.userId));
     if (params.status)

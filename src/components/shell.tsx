@@ -281,6 +281,9 @@ function NavigationLink({ item, active, mobile = false }: NavigationLinkProps) {
 
 export type ActivePathParams = { pathname: string; href: string };
 function isActivePath(params: ActivePathParams): boolean {
+  if (params.href === "/painel") {
+    return params.pathname === "/painel";
+  }
   return (
     params.pathname === params.href ||
     params.pathname.startsWith(`${params.href}/`)

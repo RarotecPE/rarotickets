@@ -46,6 +46,7 @@ export type PublicRegistrationResult = {
 export type ManagedEventListParams = { query?: string };
 export type AdminRegistrationQuery = {
   eventId?: string;
+  eventIds?: string[];
   query?: string;
   status?: string;
   page?: number;
@@ -70,9 +71,13 @@ export type CreateEventRequest = Omit<
   EventReadModel["props"],
   "status" | "createdByGlobalUserId" | "deletedAt"
 > & {
-  lots: Array<Omit<EventReadModel["lots"][number], "id" | "soldCount">>;
-  fields: Array<Omit<EventReadModel["formFields"][number], "id">>;
-  activities: Array<Omit<EventReadModel["activities"][number], "id">>;
+  lots: Array<
+    Omit<EventReadModel["lots"][number], "id" | "soldCount"> & { id?: string }
+  >;
+  fields: Array<Omit<EventReadModel["formFields"][number], "id"> & { id?: string }>;
+  activities: Array<
+    Omit<EventReadModel["activities"][number], "id"> & { id?: string }
+  >;
 };
 export type StartCheckoutResponse = { checkoutUrl: string; expiresAt: Date };
 export type MockPaymentStatus = "pago" | "recusado" | "cancelado";
@@ -218,6 +223,9 @@ export class TicketingApiService extends ApiService {
         method: "GET",
         query: {
           eventId: params.eventId,
+          eventIds: params.eventIds?.length
+            ? params.eventIds.join(",")
+            : undefined,
           q: params.query,
           status: params.status,
           page: params.page,

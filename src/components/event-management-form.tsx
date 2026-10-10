@@ -289,7 +289,19 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
   }, [eventId]);
 
   function updateDraft(params: DraftFieldChangeParams): void {
-    setDraft((current) => ({ ...current, [params.field]: params.value }));
+    setDraft((current) => {
+      const nextDraft = { ...current, [params.field]: params.value };
+      if (
+        params.field === "maxCapacity" &&
+        current.lots.length === 1 &&
+        current.lots[0].quantity === current.maxCapacity
+      ) {
+        nextDraft.lots = [
+          { ...current.lots[0], quantity: String(params.value) },
+        ];
+      }
+      return nextDraft;
+    });
     setErrors((current) => ({ ...current, [String(params.field)]: "" }));
   }
 
@@ -1658,6 +1670,7 @@ function validateEventDraft(
   const lots =
     draft.chargeType === "pago"
       ? draft.lots.map((lot) => ({
+          id: lot.rowId,
           name: lot.name.trim(),
           priceCents: Math.round(Number(lot.price) * 100),
           maxQuantity: Number(lot.quantity),
@@ -1668,6 +1681,7 @@ function validateEventDraft(
         }))
       : [];
   const fields = draft.fields.map((field, index) => ({
+    id: field.rowId,
     label: field.label.trim(),
     description: field.description.trim() || null,
     type: field.type,
@@ -1679,6 +1693,7 @@ function validateEventDraft(
     displayOrder: index,
   }));
   const activities = draft.activities.map((activity) => ({
+    id: activity.rowId,
     title: activity.title.trim(),
     description: activity.description.trim(),
     speakerName: activity.speakerName.trim(),

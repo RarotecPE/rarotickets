@@ -93,7 +93,16 @@ function mapLots(value: unknown): EventLotDraft[] | null {
     const startAt = readDate({ value: item.startAt });
     const endAt = readDate({ value: item.endAt });
     if (!startAt || !endAt) return null;
-    lots.push({ name: readText({ value: item.name }), priceCents: readInteger({ value: item.priceCents, fallback: 0 }), maxQuantity: readInteger({ value: item.maxQuantity, fallback: 0 }), startAt, endAt, active: readBoolean({ value: item.active, fallback: true }), sortOrder: readInteger({ value: item.sortOrder, fallback: lots.length }) });
+    lots.push({
+      id: readOptionalText({ value: item.id }) ?? undefined,
+      name: readText({ value: item.name }),
+      priceCents: readInteger({ value: item.priceCents, fallback: 0 }),
+      maxQuantity: readInteger({ value: item.maxQuantity, fallback: 0 }),
+      startAt,
+      endAt,
+      active: readBoolean({ value: item.active, fallback: true }),
+      sortOrder: readInteger({ value: item.sortOrder, fallback: lots.length }),
+    });
   }
   return lots;
 }
@@ -104,7 +113,15 @@ function mapFields(value: unknown): EventFieldDraft[] | null {
   const fields: EventFieldDraft[] = [];
   for (const item of value) {
     if (!isJsonRecord(item) || !FORM_FIELD_TYPES.includes(item.type as FormFieldType)) return null;
-    fields.push({ label: readText({ value: item.label }), description: readOptionalText({ value: item.description }), type: item.type as FormFieldType, required: readBoolean({ value: item.required }), options: readStringArray({ value: item.options }), displayOrder: readInteger({ value: item.displayOrder, fallback: fields.length }) });
+    fields.push({
+      id: readOptionalText({ value: item.id }) ?? undefined,
+      label: readText({ value: item.label }),
+      description: readOptionalText({ value: item.description }),
+      type: item.type as FormFieldType,
+      required: readBoolean({ value: item.required }),
+      options: readStringArray({ value: item.options }),
+      displayOrder: readInteger({ value: item.displayOrder, fallback: fields.length }),
+    });
   }
   return fields;
 }
@@ -118,7 +135,16 @@ function mapActivities(value: unknown): EventActivityDraft[] | null {
     const startAt = readDate({ value: item.startAt });
     const endAt = readDate({ value: item.endAt });
     if (!startAt || !endAt) return null;
-    activities.push({ title: readText({ value: item.title }), description: readText({ value: item.description }), speakerName: readText({ value: item.speakerName }), speakerBio: readOptionalText({ value: item.speakerBio }), room: readOptionalText({ value: item.room }), startAt, endAt });
+    activities.push({
+      id: readOptionalText({ value: item.id }) ?? undefined,
+      title: readText({ value: item.title }),
+      description: readText({ value: item.description }),
+      speakerName: readText({ value: item.speakerName }),
+      speakerBio: readOptionalText({ value: item.speakerBio }),
+      room: readOptionalText({ value: item.room }),
+      startAt,
+      endAt,
+    });
   }
   return activities;
 }

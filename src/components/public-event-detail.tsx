@@ -160,13 +160,14 @@ function EventHero({ event }: EventHeroProps) {
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/25 to-transparent" />
         <div className="relative z-10 flex w-full flex-col gap-3 p-5 sm:p-7">
           <div className="flex flex-wrap gap-2">
-            <Badge tone="primary">{online ? "Online" : "Presencial"}</Badge>
+            <Badge tone="primary" solid>{online ? "Online" : "Presencial"}</Badge>
             <Badge
               tone={event.props.chargeType === "gratuito" ? "success" : "muted"}
+              solid
             >
               {event.props.chargeType === "gratuito" ? "Gratuito" : "Pago"}
             </Badge>
-            <EventStatusBadge status={event.props.status} />
+            <EventStatusBadge status={event.props.status} solid />
           </div>
           <h1 className="max-w-3xl break-words text-2xl font-bold tracking-tight text-white sm:text-3xl">
             {event.props.title}
@@ -351,8 +352,8 @@ function EventActivities({ event }: EventActivitiesProps) {
   );
 }
 
-export type EventStatusBadgeProps = { status: string };
-function EventStatusBadge({ status }: EventStatusBadgeProps) {
+export type EventStatusBadgeProps = { status: string; solid?: boolean };
+function EventStatusBadge({ status, solid }: EventStatusBadgeProps) {
   const label =
     status === "inscricoes_abertas"
       ? "Inscrições abertas"
@@ -365,5 +366,5 @@ function EventStatusBadge({ status }: EventStatusBadgeProps) {
       : status === "agendado"
         ? "warning"
         : "muted";
-  return <Badge tone={tone}>{label}</Badge>;
+  return <Badge tone={tone} solid={solid}>{label}</Badge>;
 }

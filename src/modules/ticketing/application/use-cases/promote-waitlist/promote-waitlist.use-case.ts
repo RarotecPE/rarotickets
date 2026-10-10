@@ -3,7 +3,11 @@ import { Result } from "@/@core/domain/result";
 import type { IAuditRepository } from "@/modules/ticketing/domain/repositories/audit-repository.interface";
 import type { IOutboxRepository } from "@/modules/ticketing/domain/repositories/outbox-repository.interface";
 import type { ICredentialProvider } from "@/modules/ticketing/domain/services/credential-provider.interface";
-import type { IWaitlistPromotionRepository } from "@/modules/ticketing/domain/registrations/repositories/registration-repository.interface";
+import type { IParticipantEmailSender } from "@/modules/ticketing/domain/services/participant-email-sender.interface";
+import type {
+  IWaitlistPromotionRepository,
+  RegistrationRepository,
+} from "@/modules/ticketing/domain/registrations/repositories/registration-repository.interface";
 
 const PROMOTION_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_PROMOTIONS_PER_EVENT = 100;
@@ -18,10 +22,13 @@ export type PromoteWaitlistOutputDto = {
   registrationCodes: string[];
 };
 export type PromoteWaitlistDependencies = {
-  registrationRepository: IWaitlistPromotionRepository;
-  credentialProvider: Pick<ICredentialProvider, "issueAccessToken">;
+  registrationRepository: IWaitlistPromotionRepository &
+    Partial<Pick<RegistrationRepository, "findNotificationDetails">>;
+  credentialProvider: Pick<ICredentialProvider, "issueAccessToken"> &
+    Partial<Pick<ICredentialProvider, "createQrToken">>;
   outboxRepository: Pick<IOutboxRepository, "enqueue">;
   auditRepository: Pick<IAuditRepository, "write">;
+  emailSender?: IParticipantEmailSender;
   paymentProvider: "mock" | "pagbank";
   publicBaseUrl: string;
 };
@@ -30,10 +37,13 @@ export class PromoteWaitlistUseCase extends UseCase<
   PromoteWaitlistInputDto,
   PromoteWaitlistOutputDto
 > {
-  private readonly registrationRepository: IWaitlistPromotionRepository;
-  private readonly credentialProvider: Pick<ICredentialProvider, "issueAccessToken">;
+  private readonly registrationRepository: IWaitlistPromotionRepository &
+    Partial<Pick<RegistrationRepository, "findNotificationDetails">>;
+  private readonly credentialProvider: Pick<ICredentialProvider, "issueAccessToken"> &
+    Partial<Pick<ICredentialProvider, "createQrToken">>;
   private readonly outboxRepository: Pick<IOutboxRepository, "enqueue">;
   private readonly auditRepository: Pick<IAuditRepository, "write">;
+  private readonly emailSender?: IParticipantEmailSender;
   private readonly paymentProvider: "mock" | "pagbank";
   private readonly publicBaseUrl: string;
 
@@ -43,6 +53,7 @@ export class PromoteWaitlistUseCase extends UseCase<
     this.credentialProvider = dependencies.credentialProvider;
     this.outboxRepository = dependencies.outboxRepository;
     this.auditRepository = dependencies.auditRepository;
+    this.emailSender = dependencies.emailSender;
     this.paymentProvider = dependencies.paymentProvider;
     this.publicBaseUrl = dependencies.publicBaseUrl.replace(/\/$/, "");
   }
@@ -86,6 +97,36 @@ export class PromoteWaitlistUseCase extends UseCase<
 
       const participantUrl = `${this.publicBaseUrl}/ingressos/${encodeURIComponent(accessToken.rawToken)}`;
       const requiresPayment = promotion.status === "pendente";
+      const qrPayload =
+        !requiresPayment && this.credentialProvider.createQrToken
+          ? this.credentialProvider.createQrToken({
+              registrationId: promotion.registrationId,
+            })
+          : null;
+      const details = await this.registrationRepository
+        .findNotificationDetails?.({
+          registrationCode: promotion.registrationCode,
+        })
+        .catch(() => null);
+
+      await this.emailSender?.sendWaitlistPromotedEmail?.({
+        email: promotion.participantEmail,
+        participantName: promotion.participantName,
+        registrationCode: promotion.registrationCode,
+        eventTitle: promotion.eventTitle,
+        eventStartAt: promotion.eventStartAt,
+        eventEndAt: details?.eventEndAt,
+        modality: details?.modality,
+        location: details?.location ?? null,
+        onlineUrl: details?.onlineUrl ?? null,
+        lotName: details?.lotName ?? null,
+        status: promotion.status,
+        amountCents: promotion.finalCents,
+        waitlistExpiresAt: promotion.waitlistExpiresAt,
+        qrPayload,
+        participantUrl,
+      });
+
       const template = requiresPayment
         ? "waitlist-promoted"
         : "registration-confirmed";
@@ -103,13 +144,15 @@ export class PromoteWaitlistUseCase extends UseCase<
         waitlistExpiresAt: promotion.waitlistExpiresAt?.toISOString() ?? "",
       };
 
-      await this.outboxRepository.enqueue({
-        channel: "email",
-        recipient: promotion.participantEmail,
-        subject,
-        template,
-        payload,
-      });
+      if (!this.emailSender?.sendWaitlistPromotedEmail) {
+        await this.outboxRepository.enqueue({
+          channel: "email",
+          recipient: promotion.participantEmail,
+          subject,
+          template,
+          payload,
+        });
+      }
       if (promotion.participantPhone) {
         await this.outboxRepository.enqueue({
           channel: "whatsapp",

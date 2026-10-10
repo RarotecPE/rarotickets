@@ -16,10 +16,10 @@ export type PublicShellProps = { children: ReactNode };
 export function PublicShell({ children }: PublicShellProps) {
   return (
     <ParticipantAuthProvider>
-      <div className="min-h-screen bg-app-background text-app-foreground">
+      <div className="flex min-h-screen flex-col bg-app-background text-app-foreground">
         <PublicHeader />
-        <main>{children}</main>
-        <footer className="border-t border-app-border bg-app-surface">
+        <main className="flex-1">{children}</main>
+        <footer className="mt-auto border-t border-app-border bg-app-surface">
           <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-6 text-xs text-app-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
             <p>
               © {new Date().getFullYear()} RaroTickets · Gestão de eventos e

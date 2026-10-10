@@ -4,13 +4,19 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  Ban,
+  CalendarCheck,
   CalendarDays,
   ExternalLink,
+  Flag,
+  Lock,
   MapPin,
   MonitorPlay,
   Pencil,
+  Play,
   RefreshCw,
   Ticket,
+  Unlock,
 } from "lucide-react";
 import { ticketingApi } from "@/client/services/ticketing-api.service";
 import { useAuth } from "@/components/auth-provider";
@@ -24,37 +30,77 @@ import {
   PanelHeader,
   Spinner,
   inputCls,
-  selectCls,
 } from "@/components/ui";
 import { EventStatusBadge } from "@/components/managed-events-browser";
 import type { EventReadModel } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
 import type { EventStatus } from "@/modules/ticketing/domain/events/entities/event.aggregate";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 
 export type ManagedEventDetailProps = { eventId: string };
-type EventStatusOption = { value: EventStatus; label: string };
+type EventStatusOption = {
+  value: EventStatus;
+  label: string;
+  icon: typeof CalendarDays;
+  buttonClassName: string;
+};
+
+const ACTION_CONFIG: Record<
+  Exclude<EventStatus, "rascunho">,
+  EventStatusOption
+> = {
+  agendado: {
+    value: "agendado",
+    label: "Publicar / agendar",
+    icon: CalendarCheck,
+    buttonClassName:
+      "bg-blue-600 text-white shadow-sm hover:bg-blue-700 focus-visible:outline-blue-600",
+  },
+  inscricoes_abertas: {
+    value: "inscricoes_abertas",
+    label: "Abrir inscrições",
+    icon: Unlock,
+    buttonClassName:
+      "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 focus-visible:outline-emerald-600",
+  },
+  inscricoes_encerradas: {
+    value: "inscricoes_encerradas",
+    label: "Encerrar inscrições",
+    icon: Lock,
+    buttonClassName:
+      "bg-amber-600 text-white shadow-sm hover:bg-amber-700 focus-visible:outline-amber-600",
+  },
+  em_andamento: {
+    value: "em_andamento",
+    label: "Iniciar evento",
+    icon: Play,
+    buttonClassName:
+      "bg-violet-600 text-white shadow-sm hover:bg-violet-700 focus-visible:outline-violet-600",
+  },
+  finalizado: {
+    value: "finalizado",
+    label: "Finalizar evento",
+    icon: Flag,
+    buttonClassName:
+      "bg-teal-600 text-white shadow-sm hover:bg-teal-700 focus-visible:outline-teal-600",
+  },
+  cancelado: {
+    value: "cancelado",
+    label: "Cancelar evento",
+    icon: Ban,
+    buttonClassName:
+      "bg-rose-600 text-white shadow-sm hover:bg-rose-700 focus-visible:outline-rose-600",
+  },
+};
 
 const NEXT_STATUSES: Record<EventStatus, EventStatusOption[]> = {
-  rascunho: [
-    { value: "agendado", label: "Publicar / agendar" },
-    { value: "cancelado", label: "Cancelar evento" },
-  ],
-  agendado: [
-    { value: "inscricoes_abertas", label: "Abrir inscrições" },
-    { value: "cancelado", label: "Cancelar evento" },
-  ],
+  rascunho: [ACTION_CONFIG.agendado, ACTION_CONFIG.cancelado],
+  agendado: [ACTION_CONFIG.inscricoes_abertas, ACTION_CONFIG.cancelado],
   inscricoes_abertas: [
-    { value: "inscricoes_encerradas", label: "Encerrar inscrições" },
-    { value: "cancelado", label: "Cancelar evento" },
+    ACTION_CONFIG.inscricoes_encerradas,
+    ACTION_CONFIG.cancelado,
   ],
-  inscricoes_encerradas: [
-    { value: "em_andamento", label: "Iniciar evento" },
-    { value: "cancelado", label: "Cancelar evento" },
-  ],
-  em_andamento: [
-    { value: "finalizado", label: "Finalizar evento" },
-    { value: "cancelado", label: "Cancelar evento" },
-  ],
+  inscricoes_encerradas: [ACTION_CONFIG.em_andamento, ACTION_CONFIG.cancelado],
+  em_andamento: [ACTION_CONFIG.finalizado, ACTION_CONFIG.cancelado],
   finalizado: [],
   cancelado: [],
 };
@@ -65,10 +111,11 @@ export function ManagedEventDetail({ eventId }: ManagedEventDetailProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
-  const [nextStatus, setNextStatus] = useState<EventStatus | "">("");
+  const [showCancelForm, setShowCancelForm] = useState(false);
   const [justification, setJustification] = useState("");
   const [transitionError, setTransitionError] = useState<string | null>(null);
-  const [transitioning, setTransitioning] = useState(false);
+  const [transitioningStatus, setTransitioningStatus] =
+    useState<EventStatus | null>(null);
   const [transitionNotice, setTransitionNotice] = useState<string | null>(null);
   const canWrite = Boolean(auth.session?.permissions.includes("events:write"));
 
@@ -101,28 +148,28 @@ export function ManagedEventDetail({ eventId }: ManagedEventDetailProps) {
     setReloadVersion((current) => current + 1);
   }
 
-  async function submitTransition(
-    formEvent: FormEvent<HTMLFormElement>,
-  ): Promise<void> {
-    formEvent.preventDefault();
-    if (!event || !nextStatus) return;
+  async function executeTransition(targetStatus: EventStatus): Promise<void> {
+    if (!event || transitioningStatus) return;
     setTransitionError(null);
     setTransitionNotice(null);
-    if (nextStatus === "cancelado" && !justification.trim()) {
+    if (targetStatus === "cancelado" && !justification.trim()) {
       setTransitionError(
         "Informe a justificativa obrigatória para cancelar o evento.",
       );
       return;
     }
-    setTransitioning(true);
+    setTransitioningStatus(targetStatus);
     try {
       const updated = await ticketingApi.transitionEvent({
         eventId,
-        nextStatus,
-        justification: justification.trim() || undefined,
+        nextStatus: targetStatus,
+        justification:
+          targetStatus === "cancelado"
+            ? justification.trim() || undefined
+            : undefined,
       });
       setEvent(updated);
-      setNextStatus("");
+      setShowCancelForm(false);
       setJustification("");
       setTransitionNotice(
         `Status atualizado para ${statusLabel(updated.props.status)}.`,
@@ -134,8 +181,24 @@ export function ManagedEventDetail({ eventId }: ManagedEventDetailProps) {
           : "Não foi possível alterar o status do evento.",
       );
     } finally {
-      setTransitioning(false);
+      setTransitioningStatus(null);
     }
+  }
+
+  function handleActionClick(targetStatus: EventStatus): void {
+    setTransitionError(null);
+    setTransitionNotice(null);
+    if (targetStatus === "cancelado") {
+      setShowCancelForm(true);
+      return;
+    }
+    setShowCancelForm(false);
+    void executeTransition(targetStatus);
+  }
+
+  function submitCancellation(formEvent: FormEvent<HTMLFormElement>): void {
+    formEvent.preventDefault();
+    void executeTransition("cancelado");
   }
 
   if (loading)
@@ -266,55 +329,79 @@ export function ManagedEventDetail({ eventId }: ManagedEventDetailProps) {
         <Panel>
           <PanelHeader
             title="Transição de status"
-            description="As transições permitidas são validadas também pelo servidor."
+            description="Selecione uma ação abaixo para atualizar o status do evento."
           />
-          <form
-            onSubmit={(formEvent) => void submitTransition(formEvent)}
-            className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end sm:p-5"
-          >
-            <Field label="Novo status" htmlFor="event-next-status">
-              <select
-                id="event-next-status"
-                value={nextStatus}
-                onChange={(change) =>
-                  setNextStatus(change.target.value as EventStatus | "")
-                }
-                className={selectCls}
+          <div className="space-y-4 p-4 sm:p-5">
+            <div className="flex flex-wrap items-center gap-3">
+              {transitionOptions.map((option) => {
+                const Icon = option.icon;
+                const isLoading = transitioningStatus === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={transitioningStatus !== null}
+                    onClick={() => handleActionClick(option.value)}
+                    className={cn(
+                      "inline-flex h-10 items-center justify-center gap-2 rounded-app-md px-4 text-sm font-semibold transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                      option.buttonClassName,
+                    )}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {isLoading ? "Atualizando…" : option.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {showCancelForm ? (
+              <form
+                onSubmit={submitCancellation}
+                className="grid grid-cols-1 gap-3 rounded-app-md border border-rose-500/30 bg-rose-500/5 p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end"
               >
-                <option value="">Escolha uma ação</option>
-                {transitionOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {nextStatus === "cancelado" ? (
-              <Field
-                label="Justificativa do cancelamento *"
-                htmlFor="event-cancel-justification"
-                error={transitionError ?? undefined}
-              >
-                <input
-                  id="event-cancel-justification"
-                  value={justification}
-                  onChange={(change) => setJustification(change.target.value)}
-                  maxLength={500}
-                  className={inputCls}
-                />
-              </Field>
-            ) : (
-              <div className="hidden sm:block" />
-            )}
-            <Button type="submit" disabled={!nextStatus || transitioning}>
-              {transitioning ? "Atualizando…" : "Atualizar status"}
-            </Button>
-            {transitionError && nextStatus !== "cancelado" ? (
-              <InlineAlert tone="danger" className="sm:col-span-3">
-                {transitionError}
-              </InlineAlert>
+                <Field
+                  label="Justificativa do cancelamento *"
+                  htmlFor="event-cancel-justification"
+                  error={transitionError ?? undefined}
+                >
+                  <input
+                    id="event-cancel-justification"
+                    value={justification}
+                    onChange={(change) => setJustification(change.target.value)}
+                    placeholder="Descreva o motivo do cancelamento do evento"
+                    maxLength={500}
+                    className={inputCls}
+                    autoFocus
+                  />
+                </Field>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={transitioningStatus !== null}
+                  onClick={() => {
+                    setShowCancelForm(false);
+                    setTransitionError(null);
+                  }}
+                >
+                  Voltar
+                </Button>
+                <Button
+                  type="submit"
+                  variant="danger"
+                  disabled={transitioningStatus !== null}
+                >
+                  <Ban className="h-4 w-4" aria-hidden="true" />
+                  {transitioningStatus === "cancelado"
+                    ? "Cancelando…"
+                    : "Confirmar cancelamento"}
+                </Button>
+              </form>
             ) : null}
-          </form>
+
+            {transitionError && !showCancelForm ? (
+              <InlineAlert tone="danger">{transitionError}</InlineAlert>
+            ) : null}
+          </div>
         </Panel>
       ) : null}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">

@@ -18,7 +18,14 @@ export class ListRegistrationsController extends Controller<NextRequest, NextRes
     if (!guard.ok) return guard.response;
     try {
       const pagination = readPagination(request.nextUrl.searchParams);
-      const result = await this.useCase.execute({ eventId: readText({ value: request.nextUrl.searchParams.get("eventId") }) || undefined, query: readText({ value: request.nextUrl.searchParams.get("q") }) || undefined, status: readText({ value: request.nextUrl.searchParams.get("status") }) || undefined, ...pagination, userId: guard.session.user.id, canViewAll: guard.scope.canViewAllEvents });
+      const rawEventIds = readText({ value: request.nextUrl.searchParams.get("eventIds") });
+      const singleEventId = readText({ value: request.nextUrl.searchParams.get("eventId") });
+      const eventIds = rawEventIds
+        ? rawEventIds.split(",").map((id) => id.trim()).filter(Boolean)
+        : singleEventId
+          ? [singleEventId]
+          : undefined;
+      const result = await this.useCase.execute({ eventId: singleEventId || undefined, eventIds, query: readText({ value: request.nextUrl.searchParams.get("q") }) || undefined, status: readText({ value: request.nextUrl.searchParams.get("status") }) || undefined, ...pagination, userId: guard.session.user.id, canViewAll: guard.scope.canViewAllEvents });
       if (result.isFailure) return resultFailureResponse({ error: result.error });
       return jsonSuccess(result.value);
     } catch (error) {

@@ -122,11 +122,16 @@ export function createTicketingContainer(): TicketingContainer {
     emailProvider,
     whatsappProvider,
   });
+  const participantEmailSender = new ParticipantEmailProvider(
+    undefined,
+    fileStorageProvider,
+  );
   const promoteWaitlist = new PromoteWaitlistUseCase({
     registrationRepository,
     credentialProvider,
     outboxRepository,
     auditRepository,
+    emailSender: participantEmailSender,
     paymentProvider: environment.paymentGateway,
     publicBaseUrl: environment.appBaseUrl,
   });
@@ -138,10 +143,6 @@ export function createTicketingContainer(): TicketingContainer {
   const participantAuthRepository = new DrizzleParticipantAuthRepository({
     database,
   });
-  const participantEmailSender = new ParticipantEmailProvider(
-    undefined,
-    fileStorageProvider,
-  );
   const requestParticipantRegistration = new RequestParticipantRegistrationUseCase({
     participantAuthRepository,
     emailSender: participantEmailSender,
@@ -169,6 +170,7 @@ export function createTicketingContainer(): TicketingContainer {
     outboxRepository,
     auditRepository,
     emailSender: participantEmailSender,
+    promoteWaitlist,
     publicBaseUrl: environment.appBaseUrl,
   });
   const getParticipantEvents = new GetParticipantEventsUseCase({
@@ -193,10 +195,18 @@ export function createTicketingContainer(): TicketingContainer {
       idGenerator,
       bannerValidator: new BannerImageDomainService(),
     }),
-    updateEvent: new UpdateEventUseCase({ eventRepository, auditRepository, idGenerator }),
+    updateEvent: new UpdateEventUseCase({
+      eventRepository,
+      auditRepository,
+      idGenerator,
+      promoteWaitlist,
+      processOutbox,
+    }),
     transitionEvent: new TransitionEventUseCase({
       eventRepository,
       auditRepository,
+      promoteWaitlist,
+      processOutbox,
     }),
     createPublicRegistration: new CreatePublicRegistrationUseCase({
       eventRepository,

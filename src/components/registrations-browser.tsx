@@ -1,8 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { Ban, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import {
+  Ban,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  X,
+} from "lucide-react";
 import { ticketingApi } from "@/client/services/ticketing-api.service";
 import { useAuth } from "@/components/auth-provider";
 import { Dialog } from "@/components/dialog";
@@ -16,27 +24,54 @@ import {
   PanelHeader,
   Spinner,
   inputCls,
-  selectCls,
   textareaCls,
 } from "@/components/ui";
+import type { Tone } from "@/lib/constants";
+import type { EventReadModel } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
 import type {
   RegistrationListItem,
   RegistrationListResult,
 } from "@/modules/ticketing/domain/registrations/repositories/registration-repository.interface";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
-type RegistrationFilters = { query: string; status: string };
+type RegistrationFilters = {
+  eventIds: string[];
+  query: string;
+  status: string;
+};
+
+const STATUS_FILTER_OPTIONS: Array<{
+  value: string;
+  label: string;
+  tone: Tone;
+}> = [
+  { value: "", label: "Todos", tone: "muted" },
+  { value: "confirmada", label: "Confirmada", tone: "success" },
+  {
+    value: "aguardando_pagamento",
+    label: "Aguardando pagamento",
+    tone: "warning",
+  },
+  { value: "pendente", label: "Pendente", tone: "warning" },
+  { value: "lista_espera", label: "Lista de espera", tone: "primary" },
+  { value: "cancelada", label: "Cancelada", tone: "danger" },
+];
 
 export function RegistrationsBrowser() {
   const auth = useAuth();
+  const [events, setEvents] = useState<EventReadModel[]>([]);
   const [result, setResult] = useState<RegistrationListResult>({
     items: [],
     total: 0,
   });
+  const [eventIds, setEventIds] = useState<string[]>([]);
+  const [eventDropdownOpen, setEventDropdownOpen] = useState(false);
+  const eventDropdownRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [filters, setFilters] = useState<RegistrationFilters>({
+    eventIds: [],
     query: "",
     status: "",
   });
@@ -58,9 +93,49 @@ export function RegistrationsBrowser() {
 
   useEffect(() => {
     let active = true;
+    async function loadEvents(): Promise<void> {
+      try {
+        const eventList = await ticketingApi.listManagedEvents();
+        if (active) setEvents(eventList);
+      } catch {
+        // Caso o perfil não possua events:read ou ocorra falha, mantém a lista vazia.
+      }
+    }
+    void loadEvents();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!eventDropdownOpen) return;
+    function handlePointerDown(mouseEvent: MouseEvent): void {
+      if (
+        eventDropdownRef.current &&
+        !eventDropdownRef.current.contains(mouseEvent.target as Node)
+      ) {
+        setEventDropdownOpen(false);
+      }
+    }
+    function handleKeyDown(keyEvent: KeyboardEvent): void {
+      if (keyEvent.key === "Escape") {
+        setEventDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [eventDropdownOpen]);
+
+  useEffect(() => {
+    let active = true;
     async function loadRegistrations(): Promise<void> {
       try {
         const data = await ticketingApi.listRegistrations({
+          eventIds: filters.eventIds.length ? filters.eventIds : undefined,
           query: filters.query || undefined,
           status: filters.status || undefined,
           page,
@@ -90,7 +165,42 @@ export function RegistrationsBrowser() {
     setNotice(null);
     setLoading(true);
     setPage(1);
-    setFilters({ query: query.trim(), status });
+    setFilters({ eventIds, query: query.trim(), status });
+    setReloadVersion((current) => current + 1);
+  }
+
+  function applyEventFilters(nextEventIds: string[]): void {
+    setEventIds(nextEventIds);
+    setError(null);
+    setNotice(null);
+    setLoading(true);
+    setPage(1);
+    setFilters({ eventIds: nextEventIds, query: query.trim(), status });
+    setReloadVersion((current) => current + 1);
+  }
+
+  function toggleEventFilter(targetEventId: string): void {
+    const nextEventIds = eventIds.includes(targetEventId)
+      ? eventIds.filter((id) => id !== targetEventId)
+      : [...eventIds, targetEventId];
+    applyEventFilters(nextEventIds);
+  }
+
+  function clearEventFilters(): void {
+    if (eventIds.length === 0) return;
+    applyEventFilters([]);
+  }
+
+  function selectStatusFilter(nextValue: string): void {
+    const resolvedStatus =
+      status === nextValue && nextValue !== "" ? "" : nextValue;
+    if (resolvedStatus === status && filters.status === resolvedStatus) return;
+    setStatus(resolvedStatus);
+    setError(null);
+    setNotice(null);
+    setLoading(true);
+    setPage(1);
+    setFilters({ eventIds, query: query.trim(), status: resolvedStatus });
     setReloadVersion((current) => current + 1);
   }
 
@@ -139,6 +249,14 @@ export function RegistrationsBrowser() {
     }
   }
 
+  const selectedEventsLabel =
+    eventIds.length === 0
+      ? "Todos os eventos"
+      : eventIds.length === 1
+        ? (events.find((item) => item.id === eventIds[0])?.props.title ??
+          "1 evento selecionado")
+        : `${eventIds.length} eventos selecionados`;
+
   return (
     <div className="flex flex-col gap-5">
       <Panel>
@@ -146,10 +264,10 @@ export function RegistrationsBrowser() {
           title="Inscrições"
           description="Consulte participantes, pagamentos e credenciamento."
         />
-        <div className="p-4 sm:p-5">
+        <div className="space-y-4 p-4 sm:p-5">
           <form
             onSubmit={submitSearch}
-            className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_220px_auto]"
+            className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,300px)_auto]"
           >
             <Field label="Buscar inscrição" htmlFor="registration-query">
               <input
@@ -160,28 +278,187 @@ export function RegistrationsBrowser() {
                 placeholder="Código, nome, e-mail ou CPF"
               />
             </Field>
-            <Field label="Status" htmlFor="registration-status">
-              <select
-                id="registration-status"
-                value={status}
-                onChange={(change) => setStatus(change.target.value)}
-                className={selectCls}
-              >
-                <option value="">Todos os status</option>
-                <option value="pendente">Pendente</option>
-                <option value="aguardando_pagamento">
-                  Aguardando pagamento
-                </option>
-                <option value="confirmada">Confirmada</option>
-                <option value="lista_espera">Lista de espera</option>
-                <option value="cancelada">Cancelada</option>
-              </select>
+            <Field label="Eventos" htmlFor="registration-events-trigger">
+              <div ref={eventDropdownRef} className="relative">
+                <button
+                  id="registration-events-trigger"
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded={eventDropdownOpen}
+                  onClick={() => setEventDropdownOpen((open) => !open)}
+                  className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-app-border bg-app-surface px-3 text-left text-sm text-app-foreground transition-colors hover:border-app-muted-foreground/40 focus:border-app-primary focus:outline-none focus:ring-2 focus:ring-app-ring/30"
+                >
+                  <span className="truncate">{selectedEventsLabel}</span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {eventIds.length > 0 ? (
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-app-primary/15 px-1.5 text-xs font-semibold text-app-primary">
+                        {eventIds.length}
+                      </span>
+                    ) : null}
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 text-app-muted-foreground transition-transform",
+                        eventDropdownOpen && "rotate-180",
+                      )}
+                      aria-hidden="true"
+                    />
+                  </span>
+                </button>
+
+                {eventDropdownOpen ? (
+                  <div
+                    role="listbox"
+                    aria-label="Selecionar eventos"
+                    aria-multiselectable="true"
+                    className="absolute right-0 left-0 z-30 mt-1.5 max-h-72 overflow-y-auto rounded-md border border-app-border bg-app-surface p-1.5 shadow-lg"
+                  >
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={eventIds.length === 0}
+                      onClick={clearEventFilters}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 rounded px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
+                        eventIds.length === 0
+                          ? "bg-app-primary/10 text-app-primary"
+                          : "text-app-muted-foreground hover:bg-app-surface-2 hover:text-app-foreground",
+                      )}
+                    >
+                      <span>Todos os eventos</span>
+                      {eventIds.length > 0 ? (
+                        <span className="text-[11px] underline">
+                          Limpar ({eventIds.length})
+                        </span>
+                      ) : (
+                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      )}
+                    </button>
+
+                    {events.length > 0 ? (
+                      <div className="my-1 border-t border-app-border" />
+                    ) : null}
+
+                    {events.length === 0 ? (
+                      <p className="px-2.5 py-2 text-xs text-app-muted-foreground">
+                        Nenhum evento disponível.
+                      </p>
+                    ) : (
+                      events.map((event) => {
+                        const isChecked = eventIds.includes(event.id);
+                        return (
+                          <button
+                            key={event.id}
+                            type="button"
+                            role="option"
+                            aria-selected={isChecked}
+                            onClick={() => toggleEventFilter(event.id)}
+                            className={cn(
+                              "flex w-full items-center gap-2.5 rounded px-2.5 py-1.5 text-left text-sm transition-colors",
+                              isChecked
+                                ? "bg-app-primary/10 font-medium text-app-foreground"
+                                : "text-app-foreground hover:bg-app-surface-2",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                                isChecked
+                                  ? "border-app-primary bg-app-primary text-white"
+                                  : "border-app-border bg-app-surface",
+                              )}
+                              aria-hidden="true"
+                            >
+                              {isChecked ? (
+                                <Check className="h-3 w-3 stroke-[2.5]" />
+                              ) : null}
+                            </span>
+                            <span className="truncate">
+                              {event.props.title}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </Field>
             <Button type="submit">
               <Search className="h-4 w-4" aria-hidden="true" />
-              Filtrar
+              Buscar
             </Button>
           </form>
+
+          {eventIds.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-medium text-app-muted-foreground">
+                Eventos filtrados:
+              </span>
+              {eventIds.map((selectedId) => {
+                const matchedEvent = events.find(
+                  (item) => item.id === selectedId,
+                );
+                return (
+                  <button
+                    key={selectedId}
+                    type="button"
+                    onClick={() => toggleEventFilter(selectedId)}
+                    className="inline-flex items-center gap-1 rounded-md border border-app-primary/30 bg-app-primary/10 px-2 py-0.5 text-xs font-medium text-app-primary transition-colors hover:bg-app-primary/20"
+                  >
+                    <span className="max-w-[220px] truncate">
+                      {matchedEvent?.props.title ?? selectedId}
+                    </span>
+                    <X className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={clearEventFilters}
+                className="text-xs font-medium text-app-muted-foreground underline hover:text-app-foreground"
+              >
+                Limpar todos
+              </button>
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <span className="block text-xs font-semibold text-app-muted-foreground">
+              Filtrar por status
+            </span>
+            <div
+              role="radiogroup"
+              aria-label="Filtrar inscrições por status"
+              className="flex flex-wrap items-center gap-2"
+            >
+              {STATUS_FILTER_OPTIONS.map((option) => {
+                const isSelected = status === option.value;
+                return (
+                  <button
+                    key={option.value || "all"}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    onClick={() => selectStatusFilter(option.value)}
+                    className={cn(
+                      "rounded-app-pill transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-primary",
+                      isSelected
+                        ? "ring-2 ring-app-primary/40 ring-offset-1 ring-offset-app-surface"
+                        : "opacity-75 hover:opacity-100",
+                    )}
+                  >
+                    <Badge
+                      tone={option.tone}
+                      solid={isSelected}
+                      className="cursor-pointer px-3 py-1 text-xs"
+                    >
+                      {option.label}
+                    </Badge>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </Panel>
       {notice ? <InlineAlert tone="success">{notice}</InlineAlert> : null}

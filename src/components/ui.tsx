@@ -31,10 +31,11 @@ export function PanelHeader({ title, right, description, className }: PanelHeade
   return <div className={cn("flex flex-wrap items-center justify-between gap-3 border-b border-app-border px-4 py-3 sm:px-5", className)}><div><h2 className="text-sm font-bold text-app-foreground">{title}</h2>{description ? <p className="mt-0.5 text-xs text-app-muted-foreground">{description}</p> : null}</div>{right}</div>;
 }
 
-export type BadgeProps = { tone?: Tone; className?: string; children: ReactNode };
+export type BadgeProps = { tone?: Tone; solid?: boolean; className?: string; children: ReactNode };
 const TONE_CLS: Record<Tone, string> = { primary: "bg-app-primary/15 text-app-primary", success: "bg-app-success/15 text-app-success", warning: "bg-app-warning/15 text-app-warning", danger: "bg-app-danger/15 text-app-danger", muted: "bg-app-surface-elevated text-app-muted-foreground" };
-export function Badge({ tone = "muted", className, children }: BadgeProps) {
-  return <span className={cn("inline-flex items-center gap-1 rounded-app-pill px-2 py-0.5 text-xs font-semibold whitespace-nowrap", TONE_CLS[tone], className)}>{children}</span>;
+const SOLID_TONE_CLS: Record<Tone, string> = { primary: "bg-app-primary text-white shadow-sm backdrop-blur-sm", success: "bg-app-success text-white shadow-sm backdrop-blur-sm", warning: "bg-app-warning text-white shadow-sm backdrop-blur-sm", danger: "bg-app-danger text-white shadow-sm backdrop-blur-sm", muted: "border border-white/15 bg-slate-900/85 text-white shadow-sm backdrop-blur-sm" };
+export function Badge({ tone = "muted", solid = false, className, children }: BadgeProps) {
+  return <span className={cn("inline-flex items-center gap-1 rounded-app-pill px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap", solid ? SOLID_TONE_CLS[tone] : TONE_CLS[tone], className)}>{children}</span>;
 }
 
 export type StatProps = { label: string; value: ReactNode; hint?: string; tone?: Tone; icon?: ReactNode; className?: string };
