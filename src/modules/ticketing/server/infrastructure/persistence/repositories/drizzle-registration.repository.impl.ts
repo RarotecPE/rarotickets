@@ -525,6 +525,8 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
       checkoutUrl: reservationActive
         ? (row.payment?.checkoutUrl ?? null)
         : null,
+      paymentProvider: row.payment?.provider ?? null,
+      paymentExternalId: row.payment?.externalId ?? null,
       certificateCode: row.certificate?.authenticationCode ?? null,
       certificateIssuedAt: row.certificate?.issuedAt ?? null,
     };
@@ -579,13 +581,29 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         registration: registrations,
         participant: participants,
         event: events,
+        lot: ticketLots,
+        payment: payments,
       })
       .from(registrations)
       .innerJoin(participants, eq(registrations.participantId, participants.id))
       .innerJoin(events, eq(registrations.eventId, events.id))
+      .leftJoin(ticketLots, eq(registrations.lotId, ticketLots.id))
+      .leftJoin(payments, eq(registrations.id, payments.registrationId))
       .where(eq(registrations.code, params.registrationCode))
       .limit(1);
     if (!row) return null;
+    const event = row.event;
+    const location =
+      event.modality === "presencial"
+        ? [
+            event.addressStreet,
+            event.addressNumber,
+            event.addressMunicipality,
+            event.addressState,
+          ]
+            .filter(Boolean)
+            .join(", ") || null
+        : null;
     return {
       registrationId: row.registration.id,
       registrationCode: row.registration.code,
@@ -595,7 +613,17 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
       participantPhone: row.participant.phone,
       eventTitle: row.event.title,
       eventStartAt: row.event.startAt,
+      eventEndAt: row.event.endAt,
+      modality: row.event.modality,
+      location,
+      onlineUrl: row.event.onlineUrl,
+      lotName: row.lot?.name ?? null,
+      originalCents: row.registration.originalCents,
+      discountCents: row.registration.discountCents,
       finalCents: row.registration.finalCents,
+      paymentProvider: row.payment?.provider ?? null,
+      paymentExternalId: row.payment?.externalId ?? null,
+      paidAt: row.payment?.paidAt ?? row.registration.confirmedAt ?? null,
     };
   }
 
@@ -961,8 +989,9 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         .innerJoin(events, eq(registrations.eventId, events.id))
         .where(
           or(
-            eq(payments.referenceId, params.referenceId),
+            ilike(payments.referenceId, params.referenceId),
             eq(payments.externalId, params.externalId),
+            ilike(registrations.code, params.referenceId),
           ),
         )
         .for("update")
@@ -986,7 +1015,7 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         .where(eq(paymentWebhookEvents.id, webhook.id));
       if (
         params.amountCents !== null &&
-        params.amountCents !== payment.amountCents
+        params.amountCents < payment.amountCents
       ) {
         await transaction
           .update(payments)
@@ -1072,12 +1101,19 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
           status: "confirmada",
           refundRequired: false,
         };
-      const available = await this.hasAvailableCapacity(
-        transaction,
-        event.id,
-        event.maxCapacity,
-        params.at,
-      );
+      const hasActiveReservation =
+        (registration.status === "aguardando_pagamento" ||
+          registration.status === "pendente") &&
+        registration.reservationExpiresAt !== null &&
+        registration.reservationExpiresAt > params.at;
+      const available =
+        hasActiveReservation ||
+        (await this.hasAvailableCapacity(
+          transaction,
+          event.id,
+          event.maxCapacity,
+          params.at,
+        ));
       if (
         !available ||
         event.status === "cancelado" ||
@@ -1139,7 +1175,7 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         amountCents: payments.amountCents,
       })
       .from(payments)
-      .where(eq(payments.referenceId, params.referenceId))
+      .where(ilike(payments.referenceId, params.referenceId))
       .limit(1);
     if (!payment)
       return {

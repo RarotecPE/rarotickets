@@ -38,7 +38,7 @@ export function getFileStorageProvider(): IFileStorageProvider {
 
   const client = new S3Client({
     region,
-    ...(endpoint ? { endpoint } : {}),
+    ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
     ...(accessKeyId && secretAccessKey
       ? { credentials: { accessKeyId, secretAccessKey } }
       : {}),

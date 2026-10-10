@@ -3,16 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0",
+    "dev": "next dev --port 3005",
+    "dev:raronexus": "cd .. && cd raronexus && npm run dev",
     "build": "next build",
-    "start": "next start --hostname 0.0.0.0",
+    "start": "next start --port 3005",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx scripts/seed.ts",
-    "dev:raronexus": "cd .. && cd raronexus && npm run dev"
+    "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1147.0",

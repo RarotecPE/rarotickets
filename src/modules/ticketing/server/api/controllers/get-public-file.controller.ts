@@ -15,7 +15,7 @@ export class GetPublicFileController extends Controller<GetPublicFileRequest, Ne
   }
 
   async handle(input: GetPublicFileRequest): Promise<NextResponse> {
-    if (!isPublicBannerKey(input.key)) return jsonError({ code: "FILE_NOT_FOUND", message: "Arquivo não encontrado.", status: 404 });
+    if (!isAllowedPublicFileKey(input.key)) return jsonError({ code: "FILE_NOT_FOUND", message: "Arquivo não encontrado.", status: 404 });
     try {
       const result = await this.useCase.execute({ key: input.key });
       if (result.isFailure) return jsonError({ code: "FILE_NOT_FOUND", message: "Arquivo não encontrado.", status: 404 });
@@ -32,6 +32,13 @@ export class GetPublicFileController extends Controller<GetPublicFileRequest, Ne
   }
 }
 
-function isPublicBannerKey(key: string): boolean {
-  return key.startsWith("public/banners/") && !key.includes("..") && !key.includes("\\") && /\.(png|jpg)$/.test(key);
+function isAllowedPublicFileKey(key: string): boolean {
+  const isAllowedPrefix =
+    key.startsWith("public/banners/") || key.startsWith("public/credentials/");
+  return (
+    isAllowedPrefix &&
+    !key.includes("..") &&
+    !key.includes("\\") &&
+    /\.(png|jpg|jpeg|webp)$/i.test(key)
+  );
 }

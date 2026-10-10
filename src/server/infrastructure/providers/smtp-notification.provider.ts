@@ -4,31 +4,75 @@ import type { DeliverNotificationParams } from "@/modules/ticketing/domain/servi
 import { readEnvironment } from "@/server/config/environment.config";
 import { NotificationProvider } from "./notification-provider.base";
 
+const SMTP_MAX_ATTEMPTS = 4;
+const SMTP_BASE_DELAY_MS = 700;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientSmtpError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { code?: string; responseCode?: number; response?: string; message?: string };
+  if (typeof err.responseCode === "number" && err.responseCode >= 400 && err.responseCode < 500) {
+    return true;
+  }
+  const transientCodes = new Set(["ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "ESOCKET", "ECONNECTION", "EAI_AGAIN"]);
+  if (err.code && transientCodes.has(err.code.toUpperCase())) return true;
+  const text = `${err.message ?? ""} ${err.response ?? ""}`.toLowerCase();
+  return (
+    /\b4\d{2}\b/.test(text) ||
+    text.includes("queue file write error") ||
+    text.includes("try again") ||
+    text.includes("temporary") ||
+    text.includes("timeout")
+  );
+}
+
 export class SmtpNotificationProvider extends NotificationProvider {
   async send(params: DeliverNotificationParams): Promise<void> {
     const environment = readEnvironment();
     if (!environment.smtpHost || environment.smtpHost.startsWith("[")) {
       throw new Error("SMTP ainda não está configurado.");
     }
-    const transporter = nodemailer.createTransport({
-      host: environment.smtpHost,
-      port: environment.smtpPort,
-      secure: environment.smtpSecure,
-      auth: environment.smtpUser
-        ? { user: environment.smtpUser, pass: environment.smtpPassword }
-        : undefined,
-    });
     const content = renderEmail({
       message: params.message,
       timeZone: environment.appTimezone,
     });
-    await transporter.sendMail({
-      from: environment.smtpFrom,
-      to: params.message.recipient,
-      subject: params.message.subject,
-      html: content.html,
-      text: content.text,
-    });
+
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= SMTP_MAX_ATTEMPTS; attempt++) {
+      const transporter = nodemailer.createTransport({
+        host: environment.smtpHost,
+        port: environment.smtpPort,
+        secure: environment.smtpSecure,
+        auth: environment.smtpUser
+          ? { user: environment.smtpUser, pass: environment.smtpPassword }
+          : undefined,
+      });
+
+      try {
+        await transporter.sendMail({
+          from: environment.smtpFrom,
+          to: params.message.recipient,
+          subject: params.message.subject,
+          html: content.html,
+          text: content.text,
+        });
+        transporter.close?.();
+        return;
+      } catch (error) {
+        lastError = error;
+        transporter.close?.();
+        if (attempt >= SMTP_MAX_ATTEMPTS || !isTransientSmtpError(error)) {
+          throw error;
+        }
+        const delay = SMTP_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        await sleep(delay);
+      }
+    }
+
+    throw lastError;
   }
 }
 

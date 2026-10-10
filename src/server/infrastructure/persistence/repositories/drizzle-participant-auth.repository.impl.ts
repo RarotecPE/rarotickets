@@ -404,6 +404,8 @@ export class DrizzleParticipantAuthRepository implements ParticipantAuthReposito
         reservationExpiresAt: row.registration.reservationExpiresAt,
         waitlistExpiresAt: row.registration.waitlistExpiresAt,
         checkoutUrl: row.payment?.checkoutUrl ?? null,
+        paymentProvider: row.payment?.provider ?? null,
+        paymentExternalId: row.payment?.externalId ?? null,
         certificateCode: row.certificate?.authenticationCode ?? null,
         certificateIssuedAt: row.certificate?.issuedAt ?? null,
       };

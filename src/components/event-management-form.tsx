@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
   InlineAlert,
   Panel,
   PanelHeader,
+  Spinner,
   inputCls,
   selectCls,
   textareaCls,
@@ -169,9 +170,30 @@ function createEmptyDraft(): EventDraft {
   };
 }
 
-export function EventManagementForm() {
+function toDatetimeLocalValue(
+  value: Date | string | null | undefined,
+): string {
+  if (!value) return "";
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+export type EventManagementFormProps = {
+  eventId?: string;
+};
+
+export function EventManagementForm({ eventId }: EventManagementFormProps = {}) {
   const auth = useAuth();
+  const isEditing = Boolean(eventId);
   const [draft, setDraft] = useState<EventDraft>(createEmptyDraft);
+  const [loadingEvent, setLoadingEvent] = useState(isEditing);
+  const [isFinalized, setIsFinalized] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -181,6 +203,90 @@ export function EventManagementForm() {
   >("idle");
   const [bannerError, setBannerError] = useState<string | null>(null);
   const canWrite = Boolean(auth.session?.permissions.includes("events:write"));
+
+  useEffect(() => {
+    if (!eventId) return;
+    let active = true;
+    async function loadEvent(): Promise<void> {
+      try {
+        setLoadingEvent(true);
+        const data = await ticketingApi.getManagedEvent({ eventId: eventId! });
+        if (!active) return;
+        if (data.props.status === "finalizado") {
+          setIsFinalized(true);
+        }
+        setDraft({
+          title: data.props.title,
+          description: data.props.description,
+          summary: data.props.summary,
+          slug: data.props.slug,
+          bannerUrl: data.props.bannerUrl ?? "",
+          modality: data.props.modality,
+          chargeType: data.props.chargeType,
+          startAt: toDatetimeLocalValue(data.props.startAt),
+          endAt: toDatetimeLocalValue(data.props.endAt),
+          registrationStartAt: toDatetimeLocalValue(data.props.registrationStartAt),
+          registrationEndAt: toDatetimeLocalValue(data.props.registrationEndAt),
+          maxCapacity: String(data.props.maxCapacity),
+          allowsWaitlist: data.props.allowsWaitlist,
+          onlineUrl: data.props.onlineUrl ?? "",
+          addressStreet: data.props.address?.street ?? "",
+          addressNumber: data.props.address?.number ?? "",
+          addressComplement: data.props.address?.complement ?? "",
+          addressNeighborhood: data.props.address?.neighborhood ?? "",
+          addressMunicipality: data.props.address?.municipality ?? "",
+          addressState: data.props.address?.state ?? "",
+          responsibleName: data.props.responsibleName,
+          responsibleEmail: data.props.responsibleEmail,
+          certificateEnabled: data.props.certificateEnabled,
+          workloadHours: data.props.workloadHours ? String(data.props.workloadHours) : "",
+          certificateDescription: data.props.certificateDescription ?? "",
+          lots: data.lots.map((lot) => ({
+            rowId: lot.id || createRowId(),
+            name: lot.name,
+            price: (lot.priceCents / 100).toFixed(2),
+            quantity: String(lot.maxQuantity),
+            startAt: toDatetimeLocalValue(lot.startAt),
+            endAt: toDatetimeLocalValue(lot.endAt),
+          })),
+          fields: data.formFields.map((field) => ({
+            rowId: field.id || createRowId(),
+            label: field.label,
+            description: field.description ?? "",
+            type: field.type,
+            required: field.required,
+            optionsText: (field.options || []).join("\n"),
+          })),
+          activities: data.activities.map((act) => ({
+            rowId: act.id || createRowId(),
+            title: act.title,
+            description: act.description,
+            speakerName: act.speakerName,
+            speakerBio: act.speakerBio ?? "",
+            room: act.room ?? "",
+            startAt: toDatetimeLocalValue(act.startAt),
+            endAt: toDatetimeLocalValue(act.endAt),
+          })),
+        });
+        if (data.props.bannerUrl) {
+          setBannerState("uploaded");
+        }
+      } catch (caught) {
+        if (!active) return;
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Não foi possível carregar os dados do evento.",
+        );
+      } finally {
+        if (active) setLoadingEvent(false);
+      }
+    }
+    void loadEvent();
+    return () => {
+      active = false;
+    };
+  }, [eventId]);
 
   function updateDraft(params: DraftFieldChangeParams): void {
     setDraft((current) => ({ ...current, [params.field]: params.value }));
@@ -331,16 +437,29 @@ export function EventManagementForm() {
       return;
     }
     if (!canWrite) {
-      setError("Seu perfil não tem permissão para criar eventos.");
+      setError(
+        isEditing
+          ? "Seu perfil não tem permissão para editar eventos."
+          : "Seu perfil não tem permissão para criar eventos.",
+      );
       return;
     }
     setSaving(true);
     try {
-      const created = await ticketingApi.createEvent({
-        request: validation.request,
-      });
-      setSuccess(`Evento “${created.props.title}” criado como rascunho.`);
-      window.location.assign(`/painel/eventos/${created.id}`);
+      if (isEditing && eventId) {
+        const updated = await ticketingApi.updateEvent({
+          eventId,
+          request: validation.request,
+        });
+        setSuccess(`Evento “${updated.props.title}” atualizado com sucesso.`);
+        window.location.assign(`/painel/eventos/${updated.id}`);
+      } else {
+        const created = await ticketingApi.createEvent({
+          request: validation.request,
+        });
+        setSuccess(`Evento “${created.props.title}” criado como rascunho.`);
+        window.location.assign(`/painel/eventos/${created.id}`);
+      }
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -359,6 +478,33 @@ export function EventManagementForm() {
       </InlineAlert>
     );
 
+  if (loadingEvent) {
+    return (
+      <Panel>
+        <div className="p-8">
+          <Spinner label="Carregando dados do evento…" />
+        </div>
+      </Panel>
+    );
+  }
+
+  if (isFinalized) {
+    return (
+      <div className="flex flex-col gap-4">
+        <InlineAlert tone="danger">
+          Este evento está finalizado e não pode ser editado.
+        </InlineAlert>
+        <Link
+          href={`/painel/eventos/${eventId}`}
+          className="inline-flex min-h-8 items-center gap-2 text-xs font-semibold text-app-primary hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Voltar aos detalhes do evento
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -367,18 +513,20 @@ export function EventManagementForm() {
             Gestão de eventos
           </p>
           <h2 className="mt-1 text-xl font-bold text-app-foreground">
-            Criar evento
+            {isEditing ? "Editar evento" : "Criar evento"}
           </h2>
           <p className="mt-1 text-xs text-app-muted-foreground">
-            Configure publicação, inscrições, lotes, formulário e programação.
+            {isEditing
+              ? "Atualize publicação, inscrições, lotes, formulário e programação."
+              : "Configure publicação, inscrições, lotes, formulário e programação."}
           </p>
         </div>
         <Link
-          href="/painel/eventos"
+          href={isEditing ? `/painel/eventos/${eventId}` : "/painel/eventos"}
           className="inline-flex h-10 items-center gap-2 rounded-app-md border border-app-border bg-app-surface-elevated px-3 text-sm font-semibold text-app-foreground hover:bg-app-surface"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Voltar aos eventos
+          {isEditing ? "Voltar aos detalhes" : "Voltar aos eventos"}
         </Link>
       </div>
       {error ? <InlineAlert tone="danger">{error}</InlineAlert> : null}
@@ -448,12 +596,12 @@ export function EventManagementForm() {
                   className="h-4 w-4 animate-spin motion-reduce:animate-none"
                   aria-hidden="true"
                 />
-                Salvando…
+                {isEditing ? "Salvando alterações…" : "Salvando…"}
               </>
             ) : (
               <>
                 <Save className="h-4 w-4" aria-hidden="true" />
-                Salvar rascunho
+                {isEditing ? "Salvar alterações" : "Salvar rascunho"}
               </>
             )}
           </Button>

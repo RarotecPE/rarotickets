@@ -41,6 +41,7 @@ export type PublicRegistrationResult = {
   checkoutUrl: string | null;
   credentialUrl: string | null;
   eventTitle: string;
+  accessToken?: string;
 };
 export type ManagedEventListParams = { query?: string };
 export type AdminRegistrationQuery = {

@@ -138,7 +138,10 @@ export function createTicketingContainer(): TicketingContainer {
   const participantAuthRepository = new DrizzleParticipantAuthRepository({
     database,
   });
-  const participantEmailSender = new ParticipantEmailProvider();
+  const participantEmailSender = new ParticipantEmailProvider(
+    undefined,
+    fileStorageProvider,
+  );
   const requestParticipantRegistration = new RequestParticipantRegistrationUseCase({
     participantAuthRepository,
     emailSender: participantEmailSender,
@@ -160,8 +163,19 @@ export function createTicketingContainer(): TicketingContainer {
   const verifyParticipantOtp = new VerifyParticipantOtpUseCase({
     participantAuthRepository,
   });
+  const processPaymentWebhook = new ProcessPaymentWebhookUseCase({
+    registrationRepository,
+    credentialProvider,
+    outboxRepository,
+    auditRepository,
+    emailSender: participantEmailSender,
+    publicBaseUrl: environment.appBaseUrl,
+  });
   const getParticipantEvents = new GetParticipantEventsUseCase({
     participantAuthRepository,
+    credentialProvider,
+    paymentGateway,
+    processPaymentWebhook,
   });
   return {
     listPublicEvents: new ListPublicEventsUseCase({ eventRepository }),
@@ -179,7 +193,7 @@ export function createTicketingContainer(): TicketingContainer {
       idGenerator,
       bannerValidator: new BannerImageDomainService(),
     }),
-    updateEvent: new UpdateEventUseCase({ eventRepository, auditRepository }),
+    updateEvent: new UpdateEventUseCase({ eventRepository, auditRepository, idGenerator }),
     transitionEvent: new TransitionEventUseCase({
       eventRepository,
       auditRepository,
@@ -205,6 +219,8 @@ export function createTicketingContainer(): TicketingContainer {
     getParticipantPortal: new GetParticipantPortalUseCase({
       registrationRepository,
       credentialProvider,
+      paymentGateway,
+      processPaymentWebhook,
     }),
     startParticipantCheckout: new StartParticipantCheckoutUseCase({
       registrationRepository,
@@ -218,13 +234,7 @@ export function createTicketingContainer(): TicketingContainer {
       auditRepository,
       promoteWaitlist,
     }),
-    processPaymentWebhook: new ProcessPaymentWebhookUseCase({
-      registrationRepository,
-      credentialProvider,
-      outboxRepository,
-      auditRepository,
-      publicBaseUrl: environment.appBaseUrl,
-    }),
+    processPaymentWebhook,
     checkIn: new CheckInUseCase({
       checkInRepository,
       credentialProvider,

@@ -22,7 +22,18 @@ export class UpdateEventController extends Controller<UpdateEventRequest, NextRe
       const body = readObject(await input.request.json().catch(() => null));
       const parsed = mapUpdateEventProps(body);
       if (parsed.isFailure) return resultFailureResponse({ error: parsed.error, status: 400 });
-      const result = await this.useCase.execute({ eventId: input.eventId, props: parsed.value, userId: guard.session.user.id, userName: guard.session.user.nome, canViewAll: guard.scope.canViewAllEvents, ip: getClientIp(input.request) });
+      const { lots, fields, activities, ...props } = parsed.value;
+      const result = await this.useCase.execute({
+        eventId: input.eventId,
+        props,
+        userId: guard.session.user.id,
+        userName: guard.session.user.nome,
+        canViewAll: guard.scope.canViewAllEvents,
+        ip: getClientIp(input.request),
+        lots,
+        fields,
+        activities,
+      });
       if (result.isFailure) return resultFailureResponse({ error: result.error, status: 422 });
       return jsonSuccess(result.value);
     } catch (error) {

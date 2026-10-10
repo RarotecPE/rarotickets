@@ -57,20 +57,10 @@ export function mapCreateEventRequest(value: unknown): Result<CreateEventInputDt
 export function mapUpdateEventProps(value: unknown): Result<UpdateEventRequestData, InvalidEventRequestError> {
   const parsed = mapCreateEventRequest(value);
   if (parsed.isFailure) return Result.fail(parsed.error);
-  return Result.ok(omitEventConfiguration({ event: parsed.value }));
+  return Result.ok(parsed.value);
 }
 
-export type UpdateEventRequestData = Omit<CreateEventInputDto, "lots" | "fields" | "activities">;
-type OmitEventConfigurationParams = { event: CreateEventInputDto };
-
-function omitEventConfiguration(params: OmitEventConfigurationParams): UpdateEventRequestData {
-  const properties: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(params.event)) {
-    if (key === "lots" || key === "fields" || key === "activities") continue;
-    properties[key] = value;
-  }
-  return properties as UpdateEventRequestData;
-}
+export type UpdateEventRequestData = CreateEventInputDto;
 
 function parseModality(value: unknown): EventModality | null {
   return value === "presencial" || value === "online" ? value : null;

@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { FileStorageProvider } from "./file-storage-provider.base";
 import type {
   ReadStoredFileParams,
@@ -76,6 +77,21 @@ export class S3FileStorageProvider extends FileStorageProvider {
       return `${this.publicBaseUrl}/${path}`;
     }
 
+    if (params.preferExternalUrl && isLocalhostUrl(this.appBaseUrl)) {
+      try {
+        return await getSignedUrl(
+          this.client,
+          new GetObjectCommand({
+            Bucket: this.bucket,
+            Key: fullKey,
+          }),
+          { expiresIn: 604800 },
+        );
+      } catch {
+        // Fallback para a rota pública local caso o client seja um mock sem suporte a presign
+      }
+    }
+
     const path = params.key.split("/").map(encodeURIComponent).join("/");
     return `${this.appBaseUrl}/api/v1/public/files/${path}`;
   }
@@ -115,5 +131,11 @@ function isMissingObject(error: unknown): boolean {
     error !== null &&
     "name" in error &&
     error.name === "NoSuchKey"
+  );
+}
+
+function isLocalhostUrl(url: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(
+    url.trim(),
   );
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Badge, InlineAlert, Panel, PanelHeader } from "@/components/ui";
+import { CheckoutReturnNotifier } from "@/components/checkout-return-notifier";
 
 type CheckoutReturnSearchParams = { status?: string };
 type CheckoutReturnPageProps = {
@@ -45,12 +46,15 @@ export default async function CheckoutReturnPage({
             conferir sua credencial. Use o link de acesso enviado ao e-mail
             cadastrado.
           </p>
-          <Link
-            href="/eventos"
-            className="inline-flex h-10 items-center rounded-app-md border border-app-border bg-app-surface-elevated px-4 text-sm font-semibold text-app-foreground hover:bg-app-surface"
-          >
-            Explorar eventos
-          </Link>
+          <CheckoutReturnNotifier status={status} />
+          <div>
+            <Link
+              href="/eventos"
+              className="inline-flex h-10 items-center rounded-app-md border border-app-border bg-app-surface-elevated px-4 text-sm font-semibold text-app-foreground hover:bg-app-surface"
+            >
+              Explorar eventos
+            </Link>
+          </div>
         </div>
       </Panel>
     </div>

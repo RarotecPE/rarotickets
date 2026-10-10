@@ -28,6 +28,9 @@ export class SimulatePaymentController extends Controller<NextRequest, NextRespo
       const webhook = { eventId, referenceId: parsed.referenceId, externalId, status: parsed.status, amountCents: null, rawPayload: { event_id: eventId, reference_id: parsed.referenceId, id: externalId, status: parsed.status } };
       const result = await this.useCase.execute({ webhook, provider: "mock" });
       if (result.isFailure) return resultFailureResponse({ error: result.error });
+      if (!result.value.duplicate && !result.value.registrationCode) {
+        return jsonError({ code: "PAYMENT_NOT_FOUND", message: "Nenhuma cobrança ativa foi encontrada para a referência informada.", status: 404 });
+      }
       return jsonSuccess(result.value);
     } catch (error) {
       return internalErrorResponse(error);
@@ -37,9 +40,9 @@ export class SimulatePaymentController extends Controller<NextRequest, NextRespo
 
 function parseMockPayment(value: unknown): { referenceId: string; status: NormalizedPaymentStatus } | null {
   if (!isJsonRecord(value)) return null;
-  const referenceId = readText({ value: value.referenceId }).toUpperCase();
+  const referenceId = readText({ value: value.referenceId }).trim();
   const statusMap: Record<SimulatePaymentStatus, NormalizedPaymentStatus> = { pago: "pago", recusado: "recusado", cancelado: "cancelado" };
   const statusValue = readText({ value: value.status }) as SimulatePaymentStatus;
-  if (!/^[A-Z0-9-]{6,40}$/.test(referenceId) || !statusMap[statusValue]) return null;
+  if (!/^[a-zA-Z0-9_-]{6,80}$/.test(referenceId) || !statusMap[statusValue]) return null;
   return { referenceId, status: statusMap[statusValue] };
 }

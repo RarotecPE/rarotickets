@@ -21,6 +21,43 @@ export function MockCheckout({ referenceId }: MockCheckoutProps) {
   const [error, setError] = useState<string | null>(null);
   const [completedStatus, setCompletedStatus] =
     useState<MockPaymentStatus | null>(null);
+  const [hasOpener] = useState(
+    () => typeof window !== "undefined" && Boolean(window.opener && !window.opener.closed),
+  );
+
+  function notifyParentWindow(status: MockPaymentStatus): void {
+    if (typeof window === "undefined") return;
+    const payload = {
+      type: "PAYMENT_COMPLETED",
+      status,
+      referenceId,
+      at: Date.now(),
+    };
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage(payload, "*");
+      }
+    } catch {
+      // Ignora restrições de cross-origin caso existam
+    }
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        const channel = new BroadcastChannel("rarotickets-payment");
+        channel.postMessage(payload);
+        channel.close();
+      }
+    } catch {
+      // BroadcastChannel indisponível
+    }
+    try {
+      window.localStorage.setItem(
+        "rarotickets:last-payment-update",
+        JSON.stringify(payload),
+      );
+    } catch {
+      // localStorage indisponível
+    }
+  }
 
   async function simulatePayment(status: MockPaymentStatus): Promise<void> {
     setProcessing(true);
@@ -28,6 +65,7 @@ export function MockCheckout({ referenceId }: MockCheckoutProps) {
     try {
       await ticketingApi.simulateMockPayment({ referenceId, status });
       setCompletedStatus(status);
+      notifyParentWindow(status);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -80,20 +118,36 @@ export function MockCheckout({ referenceId }: MockCheckoutProps) {
               : "Pagamento não aprovado"}
           </h2>
           <p className="max-w-md text-sm leading-relaxed text-app-muted-foreground">
-            Volte à Área do Participante para atualizar o status da inscrição. A
-            confirmação depende do processamento da notificação de pagamento.
+            {hasOpener
+              ? "A janela principal do RaroTickets já foi notificada automaticamente sobre o resultado desta transação."
+              : "Volte à Área do Participante para atualizar o status da inscrição. A confirmação depende do processamento da notificação de pagamento."}
           </p>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() =>
-              window.location.assign(
-                `/ingressos/checkout-retorno?status=${completedStatus}`,
-              )
-            }
-          >
-            Continuar
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            {hasOpener ? (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  notifyParentWindow(completedStatus);
+                  window.close();
+                }}
+              >
+                Fechar janela e voltar à inscrição
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                notifyParentWindow(completedStatus);
+                window.location.assign(
+                  `/ingressos/checkout-retorno?status=${completedStatus}`,
+                );
+              }}
+            >
+              Continuar
+            </Button>
+          </div>
         </div>
       </Panel>
     );

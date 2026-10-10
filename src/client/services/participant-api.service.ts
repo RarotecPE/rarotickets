@@ -11,6 +11,9 @@ export type ParticipantProfile = {
   email: string;
   cpf: string | null;
   phone: string;
+  birthDate?: string | null;
+  company?: string | null;
+  jobTitle?: string | null;
 };
 
 export type ParticipantSessionResponse = {

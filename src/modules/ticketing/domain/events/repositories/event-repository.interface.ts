@@ -51,7 +51,16 @@ export type CreateEventRecordParams = { event: Event; lots: NewEventLot[]; field
 export type NewEventLot = { id: string; name: string; priceCents: number; maxQuantity: number; startAt: Date; endAt: Date; active: boolean; sortOrder: number };
 export type NewEventField = { id: string; label: string; description: string | null; type: FormFieldType; required: boolean; options: string[]; displayOrder: number };
 export type NewEventActivity = { id: string; title: string; description: string; speakerName: string; speakerBio: string | null; room: string | null; startAt: Date; endAt: Date };
-export type UpdateEventDetailsParams = { eventId: string; actorId: string; canViewAll: boolean; props: EventProps; updatedAt: Date };
+export type UpdateEventDetailsParams = {
+  eventId: string;
+  actorId: string;
+  canViewAll: boolean;
+  props: EventProps;
+  updatedAt: Date;
+  lots?: NewEventLot[];
+  fields?: NewEventField[];
+  activities?: NewEventActivity[];
+};
 export type TransitionEventParams = { eventId: string; actorId: string; canViewAll: boolean; nextStatus: EventProps["status"]; at: Date; justification?: string };
 export type EventRegistrationCountParams = { eventId: string };
 

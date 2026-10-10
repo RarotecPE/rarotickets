@@ -64,7 +64,27 @@ export type FindPortalRegistrationParams = { accessTokenHash: string };
 export type CheckoutDetailsParams = { accessTokenHash: string };
 export type ParticipantCheckoutDetails = { registrationId: string; registrationCode: string; status: RegistrationStatus; expiresAt: Date | null; paymentId: string | null; checkoutUrl: string | null; amountCents: number; customerName: string; customerEmail: string; customerTaxId: string; customerPhone: string; eventTitle: string };
 export type FindRegistrationNotificationParams = { registrationCode: string };
-export type RegistrationNotificationDetails = { registrationId: string; registrationCode: string; status: RegistrationStatus; participantName: string; participantEmail: string; participantPhone: string; eventTitle: string; eventStartAt: Date; finalCents: number };
+export type RegistrationNotificationDetails = {
+  registrationId: string;
+  registrationCode: string;
+  status: RegistrationStatus;
+  participantName: string;
+  participantEmail: string;
+  participantPhone: string;
+  eventTitle: string;
+  eventStartAt: Date;
+  eventEndAt?: Date;
+  modality?: string;
+  location?: string | null;
+  onlineUrl?: string | null;
+  lotName?: string | null;
+  originalCents?: number;
+  discountCents?: number;
+  finalCents: number;
+  paymentProvider?: string | null;
+  paymentExternalId?: string | null;
+  paidAt?: Date | null;
+};
 export type FindPrivateRegistrationFileParams = { fileId: string; userId: string; canViewAll: boolean };
 export type PrivateRegistrationFile = { id: string; storageKey: string; originalName: string; mimeType: string; sizeBytes: number; eventId: string };
 export type ParticipantPortalView = {
@@ -90,6 +110,8 @@ export type ParticipantPortalView = {
   credentialToken: string | null;
   qrPayload: string | null;
   checkoutUrl: string | null;
+  paymentProvider?: string | null;
+  paymentExternalId?: string | null;
   certificateCode: string | null;
   certificateIssuedAt: Date | null;
 };

@@ -1,4 +1,9 @@
-export type StoreFileParams = { key: string; contentType: string; content: Uint8Array };
+export type StoreFileParams = {
+  key: string;
+  contentType: string;
+  content: Uint8Array;
+  preferExternalUrl?: boolean;
+};
 export type ReadStoredFileParams = { key: string };
 export type StoredFileContent = { content: Uint8Array; contentType: string };
 

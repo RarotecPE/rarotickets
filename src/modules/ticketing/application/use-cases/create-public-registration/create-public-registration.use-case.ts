@@ -33,7 +33,11 @@ export type CreatePublicRegistrationInputDto = {
   couponCode: string | null;
   ip: string | null;
 };
-export type CreatePublicRegistrationOutputDto = PublicRegistrationResult & { participantUrl: string; credentialUrl: string | null };
+export type CreatePublicRegistrationOutputDto = PublicRegistrationResult & {
+  participantUrl: string;
+  credentialUrl: string | null;
+  accessToken: string;
+};
 export type CreatePublicRegistrationDependencies = {
   eventRepository: EventRepository;
   registrationRepository: RegistrationRepository;
@@ -135,7 +139,12 @@ export class CreatePublicRegistrationUseCase extends UseCase<CreatePublicRegistr
     const credentialUrl = withCheckout.status === "confirmada" ? participantUrl : null;
     await this.enqueueRegistrationNotification(withCheckout, participant, participantUrl);
     await this.auditRepository.write({ userId: "public", userName: participant.name, action: "registration.created", entity: "registration", recordId: withCheckout.registrationId, beforeData: null, afterData: { eventSlug: withCheckout.eventSlug, status: withCheckout.status, totalCents: withCheckout.finalCents }, ip: input.ip });
-    return Result.ok({ ...withCheckout, participantUrl, credentialUrl });
+    return Result.ok({
+      ...withCheckout,
+      participantUrl,
+      credentialUrl,
+      accessToken: accessToken.rawToken,
+    });
   }
 
   private prepareParticipantFiles(params: PrepareParticipantFilesParams): Result<PreparedParticipantFilesResult> {

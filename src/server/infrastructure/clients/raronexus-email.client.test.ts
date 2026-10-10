@@ -117,5 +117,44 @@ describe("RaroNexusEmailClient", () => {
       })
     ).rejects.toThrow("Configurações do RaroNexus ausentes");
   });
+
+  it("tenta novamente quando ocorre falha transitória como 451 queue file write error e conclui com sucesso", async () => {
+    let callCount = 0;
+
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount < 3) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              success: false,
+              code: "EMAIL_SEND_FAILED",
+              message: "Message failed: 451 4.3.0 Error: queue file write error",
+            }),
+            { status: 502 }
+          )
+        );
+      }
+
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: { sent: true, message_id: "<msg-retry-ok@nexus.local>" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
+    });
+
+    const client = new RaroNexusEmailClient({ maxAttempts: 3, baseDelayMs: 1 });
+    const result = await client.send({
+      to: "user@teste.com",
+      body: "<p>Teste com retry</p>",
+    });
+
+    expect(callCount).toBe(3);
+    expect(result).toEqual({ sent: true, messageId: "<msg-retry-ok@nexus.local>" });
+  });
 });
 

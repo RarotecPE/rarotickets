@@ -27,9 +27,11 @@ export type PaymentWebhook = {
   rawPayload: Record<string, unknown>;
 };
 export type VerifyPaymentWebhookParams = { rawBody: string; signature: string | null };
+export type CheckPaymentStatusParams = { referenceId: string; externalId: string };
 
 export interface IPaymentGateway {
   createCheckout(params: CreateCheckoutParams): Promise<PaymentCheckout>;
   verifyWebhook(params: VerifyPaymentWebhookParams): boolean;
   parseWebhook(payload: Record<string, unknown>): PaymentWebhook | null;
+  checkPaymentStatus?(params: CheckPaymentStatusParams): Promise<PaymentWebhook | null>;
 }

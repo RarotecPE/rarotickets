@@ -84,6 +84,8 @@ export type ParticipantEventItem = {
   reservationExpiresAt: Date | null;
   waitlistExpiresAt: Date | null;
   checkoutUrl: string | null;
+  paymentProvider?: string | null;
+  paymentExternalId?: string | null;
   certificateCode: string | null;
   certificateIssuedAt: Date | null;
 };

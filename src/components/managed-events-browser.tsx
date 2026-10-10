@@ -125,7 +125,7 @@ export function ManagedEventsBrowser() {
           </div>
         </Panel>
       ) : error ? null : events.length ? (
-        <EventsTable events={events} />
+        <EventsTable events={events} canWrite={canWrite} />
       ) : (
         <Panel>
           <div className="p-4 sm:p-5">
@@ -154,8 +154,11 @@ export function ManagedEventsBrowser() {
   );
 }
 
-export type EventsTableProps = { events: EventReadModel[] };
-function EventsTable({ events }: EventsTableProps) {
+export type EventsTableProps = {
+  events: EventReadModel[];
+  canWrite?: boolean;
+};
+function EventsTable({ events, canWrite }: EventsTableProps) {
   return (
     <Panel>
       <PanelHeader
@@ -189,7 +192,11 @@ function EventsTable({ events }: EventsTableProps) {
           </thead>
           <tbody>
             {events.map((event) => (
-              <EventTableRow key={event.id} event={event} />
+              <EventTableRow
+                key={event.id}
+                event={event}
+                canWrite={canWrite}
+              />
             ))}
           </tbody>
         </table>
@@ -198,8 +205,11 @@ function EventsTable({ events }: EventsTableProps) {
   );
 }
 
-export type EventTableRowProps = { event: EventReadModel };
-function EventTableRow({ event }: EventTableRowProps) {
+export type EventTableRowProps = {
+  event: EventReadModel;
+  canWrite?: boolean;
+};
+function EventTableRow({ event, canWrite }: EventTableRowProps) {
   const registered = event.capacity.confirmed + event.capacity.reserved;
   const price =
     event.props.chargeType === "gratuito"
@@ -241,12 +251,22 @@ function EventTableRow({ event }: EventTableRowProps) {
           : (price ?? "—")}
       </td>
       <td className="px-4 py-3 text-right sm:px-5">
-        <Link
-          href={`/painel/eventos/${event.id}`}
-          className="text-xs font-semibold text-app-primary hover:underline"
-        >
-          Abrir
-        </Link>
+        <div className="flex items-center justify-end gap-3">
+          {event.props.status !== "finalizado" && canWrite ? (
+            <Link
+              href={`/painel/eventos/${event.id}/editar`}
+              className="text-xs font-semibold text-app-foreground hover:text-app-primary hover:underline"
+            >
+              Editar
+            </Link>
+          ) : null}
+          <Link
+            href={`/painel/eventos/${event.id}`}
+            className="text-xs font-semibold text-app-primary hover:underline"
+          >
+            Abrir
+          </Link>
+        </div>
       </td>
     </tr>
   );

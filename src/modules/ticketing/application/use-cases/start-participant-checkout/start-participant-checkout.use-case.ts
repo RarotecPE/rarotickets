@@ -21,8 +21,14 @@ export class StartParticipantCheckoutUseCase extends UseCase<StartParticipantChe
     this.publicBaseUrl = dependencies.publicBaseUrl.replace(/\/$/, "");
   }
   async execute(input: StartParticipantCheckoutInputDto): Promise<Result<StartParticipantCheckoutOutputDto>> {
-    const accessTokenHash = this.credentialProvider.hashToken({ token: input.accessToken });
-    const details = await this.registrationRepository.findCheckoutDetails({ accessTokenHash });
+    const rawOrHash = input.accessToken.trim();
+    const accessTokenHash = this.credentialProvider.hashToken({ token: rawOrHash });
+    let details = await this.registrationRepository.findCheckoutDetails({ accessTokenHash });
+    if (!details && /^[a-f0-9]{64}$/i.test(rawOrHash)) {
+      details = await this.registrationRepository.findCheckoutDetails({
+        accessTokenHash: rawOrHash.toLowerCase(),
+      });
+    }
     if (!details || !details.paymentId || !details.expiresAt) return Result.fail(new Error("Não há uma reserva de pagamento ativa para este link."));
     if (details.expiresAt <= new Date()) return Result.fail(new Error("O prazo da reserva expirou."));
     if (details.checkoutUrl) return Result.ok({ checkoutUrl: details.checkoutUrl, expiresAt: details.expiresAt });

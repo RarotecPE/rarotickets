@@ -84,7 +84,49 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
   async update(params: UpdateEventDetailsParams): Promise<EventReadModel | null> {
     const filters = [eq(events.id, params.eventId), isNull(events.deletedAt)];
     if (!params.canViewAll) filters.push(eq(events.createdByGlobalUserId, params.actorId));
-    const [row] = await this.database.update(events).set({ ...toEventUpdate(params.props), updatedAt: params.updatedAt }).where(and(...filters)).returning();
+    const row = await this.database.transaction(async (transaction) => {
+      const [updatedRow] = await transaction
+        .update(events)
+        .set({ ...toEventUpdate(params.props), updatedAt: params.updatedAt })
+        .where(and(...filters))
+        .returning();
+      if (!updatedRow) return null;
+
+      if (params.activities !== undefined) {
+        await transaction.delete(eventActivities).where(eq(eventActivities.eventId, params.eventId));
+        if (params.activities.length) {
+          await transaction.insert(eventActivities).values(params.activities.map((activity) => ({ ...activity, eventId: params.eventId })));
+        }
+      }
+
+      if (params.lots !== undefined) {
+        const [regCount] = await transaction
+          .select({ value: count() })
+          .from(registrations)
+          .where(and(eq(registrations.eventId, params.eventId), isNull(registrations.deletedAt)));
+        if (Number(regCount?.value ?? 0) === 0) {
+          await transaction.delete(ticketLots).where(eq(ticketLots.eventId, params.eventId));
+          if (params.lots.length) {
+            await transaction.insert(ticketLots).values(params.lots.map((lot) => ({ ...lot, eventId: params.eventId })));
+          }
+        }
+      }
+
+      if (params.fields !== undefined) {
+        const [regCount] = await transaction
+          .select({ value: count() })
+          .from(registrations)
+          .where(and(eq(registrations.eventId, params.eventId), isNull(registrations.deletedAt)));
+        if (Number(regCount?.value ?? 0) === 0) {
+          await transaction.delete(eventFormFields).where(eq(eventFormFields.eventId, params.eventId));
+          if (params.fields.length) {
+            await transaction.insert(eventFormFields).values(params.fields.map((field) => ({ ...field, eventId: params.eventId })));
+          }
+        }
+      }
+
+      return updatedRow;
+    });
     return row ? this.buildReadModel({ row }) : null;
   }
 
