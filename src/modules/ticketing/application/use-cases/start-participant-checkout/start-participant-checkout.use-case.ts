@@ -36,8 +36,12 @@ export class StartParticipantCheckoutUseCase extends UseCase<StartParticipantChe
       const checkout = await this.paymentGateway.createCheckout({ referenceId: details.registrationId, description: details.eventTitle, amountCents: details.amountCents, customer: { name: details.customerName, email: details.customerEmail, taxId: details.customerTaxId, phone: details.customerPhone }, notificationUrl: `${this.publicBaseUrl}/api/webhooks/pagbank`, returnUrl: `${this.publicBaseUrl}/ingressos/checkout-retorno` });
       await this.registrationRepository.attachCheckout({ registrationId: details.registrationId, paymentId: details.paymentId, provider: checkout.provider, externalId: checkout.externalId, checkoutUrl: checkout.checkoutUrl, at: new Date() });
       return Result.ok({ checkoutUrl: checkout.checkoutUrl, expiresAt: details.expiresAt });
-    } catch {
-      return Result.fail(new Error("Não foi possível iniciar o pagamento agora. Tente novamente antes do fim da reserva."));
+    } catch (error) {
+      return Result.fail(
+        error instanceof Error
+          ? error
+          : new Error("Não foi possível iniciar o pagamento agora. Tente novamente antes do fim da reserva."),
+      );
     }
   }
 }

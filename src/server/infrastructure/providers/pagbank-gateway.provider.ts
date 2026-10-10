@@ -68,7 +68,14 @@ export class PagBankGateway extends PaymentGateway {
       signal: AbortSignal.timeout(12_000),
     });
     const payload: unknown = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(`PagBank recusou a criação do checkout (HTTP ${response.status}).`);
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error(
+          `Credencial do PagBank inválida (HTTP 401). Verifique se o PAGBANK_TOKEN corresponde ao ambiente configurado (${environment.pagBankBaseUrl}).`,
+        );
+      }
+      throw new Error(`PagBank recusou a criação do checkout (HTTP ${response.status}).`);
+    }
     const checkout = readCheckout(payload);
     if (!checkout) throw new Error("A resposta do PagBank não contém um link seguro de checkout.");
     return { ...checkout, provider: "pagbank" };

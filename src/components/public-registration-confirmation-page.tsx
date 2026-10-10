@@ -521,12 +521,16 @@ export function PublicRegistrationConfirmationPage({
         setStep("waitlist");
       } else if (result.status === "confirmada" || result.finalCents === 0) {
         setStep("confirmed");
-      } else if (result.checkoutUrl) {
+      } else {
         setStep("waiting_payment");
         setSecondsRemaining(15 * 60);
-        openPagSeguroPopup(result.checkoutUrl);
-      } else {
-        setStep("confirmed");
+        if (result.checkoutUrl) {
+          openPagSeguroPopup(result.checkoutUrl);
+        } else {
+          setPaymentNotice(
+            "Não foi possível abrir o checkout do PagBank automaticamente (verifique se o PAGBANK_TOKEN corresponde ao ambiente configurado). Clique em 'Abrir pagamento no PagSeguro' para tentar novamente.",
+          );
+        }
       }
     } catch (caught) {
       const apiErrors = readApiFieldErrors(caught);
@@ -721,19 +725,42 @@ export function PublicRegistrationConfirmationPage({
             </div>
 
             <div className="flex flex-col gap-2.5 sm:flex-row sm:justify-between">
-              {registrationResult.checkoutUrl ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() =>
-                    registrationResult.checkoutUrl &&
-                    openPagSeguroPopup(registrationResult.checkoutUrl)
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isCheckingPayment}
+                onClick={async () => {
+                  if (registrationResult.checkoutUrl) {
+                    openPagSeguroPopup(registrationResult.checkoutUrl);
+                    return;
                   }
-                >
-                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                  Reabrir popup do PagSeguro
-                </Button>
-              ) : null}
+                  if (!registrationResult.accessToken) return;
+                  setIsCheckingPayment(true);
+                  setPaymentNotice(null);
+                  try {
+                    const started = await ticketingApi.startParticipantCheckout({
+                      accessToken: registrationResult.accessToken,
+                    });
+                    setRegistrationResult((prev) =>
+                      prev ? { ...prev, checkoutUrl: started.checkoutUrl } : prev,
+                    );
+                    openPagSeguroPopup(started.checkoutUrl);
+                  } catch (caught) {
+                    setPaymentNotice(
+                      caught instanceof Error
+                        ? caught.message
+                        : "Não foi possível gerar o link de pagamento no PagBank.",
+                    );
+                  } finally {
+                    setIsCheckingPayment(false);
+                  }
+                }}
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                {registrationResult.checkoutUrl
+                  ? "Reabrir popup do PagSeguro"
+                  : "Abrir pagamento no PagSeguro"}
+              </Button>
 
               <Button
                 type="button"
