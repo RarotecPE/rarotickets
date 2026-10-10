@@ -7,9 +7,11 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import jsQR from "jsqr";
 import {
   Camera,
   CheckCircle2,
+  RefreshCw,
   ScanLine,
   ShieldCheck,
   StopCircle,
@@ -28,6 +30,7 @@ import {
   Panel,
   PanelHeader,
   inputCls,
+  selectCls,
   textareaCls,
 } from "@/components/ui";
 import { formatDate } from "@/lib/utils";
@@ -45,48 +48,63 @@ export function CheckInConsole() {
     auth.session?.permissions.includes("checkin:reentry"),
   );
 
-  const acceptScannedToken = useCallback((value: string) => {
-    setQrToken(value);
-    setError(null);
-    setResult(null);
-  }, []);
+  const performCheckIn = useCallback(
+    async (rawToken: string): Promise<void> => {
+      setError(null);
+      setResult(null);
+      const token = rawToken.trim();
+      if (!token) {
+        setError("Escaneie ou informe o token do QR Code da credencial.");
+        return;
+      }
+      if (reentry && !justification.trim()) {
+        setError("A justificativa é obrigatória para uma reentrada.");
+        return;
+      }
+      setProcessing(true);
+      try {
+        const response = await ticketingApi.checkIn({
+          qrToken: token,
+          reentry,
+          justification: reentry ? justification.trim() : undefined,
+        });
+        setResult(response);
+        setQrToken("");
+        setJustification("");
+        setReentry(false);
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Não foi possível registrar o check-in.",
+        );
+      } finally {
+        setProcessing(false);
+      }
+    },
+    [justification, reentry],
+  );
+
+  const acceptScannedToken = useCallback(
+    (value: string) => {
+      const cleaned = value.trim();
+      setQrToken(cleaned);
+      setError(null);
+      setResult(null);
+      if (!reentry || justification.trim()) {
+        void performCheckIn(cleaned);
+      }
+    },
+    [justification, performCheckIn, reentry],
+  );
+
   const closeCamera = useCallback(() => setCameraOpen(false), []);
 
   async function submitCheckIn(
     formEvent: FormEvent<HTMLFormElement>,
   ): Promise<void> {
     formEvent.preventDefault();
-    setError(null);
-    setResult(null);
-    const token = qrToken.trim();
-    if (!token) {
-      setError("Escaneie ou informe o token do QR Code da credencial.");
-      return;
-    }
-    if (reentry && !justification.trim()) {
-      setError("A justificativa é obrigatória para uma reentrada.");
-      return;
-    }
-    setProcessing(true);
-    try {
-      const response = await ticketingApi.checkIn({
-        qrToken: token,
-        reentry,
-        justification: reentry ? justification.trim() : undefined,
-      });
-      setResult(response);
-      setQrToken("");
-      setJustification("");
-      setReentry(false);
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Não foi possível registrar o check-in.",
-      );
-    } finally {
-      setProcessing(false);
-    }
+    await performCheckIn(qrToken);
   }
 
   return (
@@ -122,7 +140,7 @@ export function CheckInConsole() {
             <Field
               label="Token do QR Code *"
               htmlFor="checkin-qr-token"
-              hint="O leitor USB/Bluetooth funciona como teclado; também é possível colar o token da credencial."
+              hint="O leitor USB/Bluetooth funciona como teclado; também é possível usar a câmera ou colar o token da credencial."
             >
               <div className="flex gap-2">
                 <input
@@ -300,13 +318,18 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 type DetectedCode = { rawValue: string };
 type BrowserBarcodeDetector = {
-  detect: (source: HTMLVideoElement) => Promise<DetectedCode[]>;
+  detect: (source: ImageBitmapSource) => Promise<DetectedCode[]>;
 };
 type BrowserBarcodeDetectorConstructor = new (options: {
   formats: string[];
 }) => BrowserBarcodeDetector;
 type WindowWithBarcodeDetector = Window & {
   BarcodeDetector?: BrowserBarcodeDetectorConstructor;
+};
+
+type CameraDeviceOption = {
+  deviceId: string;
+  label: string;
 };
 
 function QrCameraScanner({
@@ -318,6 +341,9 @@ function QrCameraScanner({
 }) {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [starting, setStarting] = useState(true);
+  const [devices, setDevices] = useState<CameraDeviceOption[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+  const [retryCount, setRetryCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -326,66 +352,176 @@ function QrCameraScanner({
     let intervalId: number | null = null;
     let scanning = false;
 
-    async function startCamera(): Promise<void> {
-      const Detector = (window as WindowWithBarcodeDetector).BarcodeDetector;
-      if (!Detector) {
-        setCameraError(
-          "Este navegador não oferece leitura de QR pela câmera. Use um leitor USB/Bluetooth ou cole o token manualmente.",
-        );
-        setStarting(false);
-        return;
-      }
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraError(
-          "A câmera não está disponível neste navegador ou contexto. Use o campo de token manualmente.",
-        );
-        setStarting(false);
-        return;
-      }
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
+    async function acquireStream(): Promise<MediaStream> {
+      if (selectedDeviceId) {
+        return navigator.mediaDevices.getUserMedia({
+          video: {
+            deviceId: { exact: selectedDeviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
           audio: false,
         });
+      }
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch {
+        return navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+    }
+
+    async function startCamera(): Promise<void> {
+      setCameraError(null);
+      setStarting(true);
+
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices?.getUserMedia
+      ) {
+        setCameraError(
+          "O acesso à câmera não está disponível neste navegador ou exige conexão segura (HTTPS / localhost).",
+        );
+        setStarting(false);
+        return;
+      }
+
+      try {
+        stream = await acquireStream();
         if (disposed) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
+
+        if (navigator.mediaDevices.enumerateDevices) {
+          const allDevices = await navigator.mediaDevices
+            .enumerateDevices()
+            .catch(() => []);
+          if (!disposed) {
+            const videoInputs = allDevices
+              .filter((device) => device.kind === "videoinput")
+              .map((device, idx) => ({
+                deviceId: device.deviceId,
+                label: device.label || `Câmera ${idx + 1}`,
+              }));
+            setDevices(videoInputs);
+            if (!selectedDeviceId && stream.getVideoTracks().length > 0) {
+              const activeTrackDeviceId = stream
+                .getVideoTracks()[0]
+                .getSettings?.().deviceId;
+              if (activeTrackDeviceId) {
+                setSelectedDeviceId(activeTrackDeviceId);
+              }
+            }
+          }
+        }
+
         const video = videoRef.current;
-        if (!video)
+        if (!video) {
           throw new Error("Não foi possível iniciar a prévia da câmera.");
+        }
         video.srcObject = stream;
         await video.play();
         if (disposed) return;
-        const detector = new Detector({ formats: ["qr_code"] });
+
+        const Detector = (window as WindowWithBarcodeDetector).BarcodeDetector;
+        let nativeDetector: BrowserBarcodeDetector | null = null;
+        if (Detector) {
+          try {
+            nativeDetector = new Detector({ formats: ["qr_code"] });
+          } catch {
+            nativeDetector = null;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+
         setStarting(false);
+
         intervalId = window.setInterval(() => {
-          if (scanning || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA)
+          if (
+            scanning ||
+            disposed ||
+            video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+            video.videoWidth === 0 ||
+            video.videoHeight === 0
+          ) {
             return;
+          }
           scanning = true;
-          void detector
-            .detect(video)
-            .then((codes) => {
-              const payload = codes
-                .find((code) => code.rawValue.trim())
-                ?.rawValue.trim();
-              if (payload && !disposed) {
-                onDetected(payload);
-                onClose();
+
+          void (async () => {
+            try {
+              if (nativeDetector) {
+                const codes = await nativeDetector
+                  .detect(video)
+                  .catch(() => []);
+                const nativePayload = codes
+                  .find((code) => code.rawValue?.trim())
+                  ?.rawValue.trim();
+                if (nativePayload && !disposed) {
+                  onDetected(nativePayload);
+                  onClose();
+                  return;
+                }
               }
-            })
-            .catch(() => undefined)
-            .finally(() => {
+
+              if (context) {
+                const maxDimension = 720;
+                const scale = Math.min(
+                  1,
+                  maxDimension / Math.max(video.videoWidth, video.videoHeight),
+                );
+                const width = Math.max(1, Math.floor(video.videoWidth * scale));
+                const height = Math.max(
+                  1,
+                  Math.floor(video.videoHeight * scale),
+                );
+                if (canvas.width !== width || canvas.height !== height) {
+                  canvas.width = width;
+                  canvas.height = height;
+                }
+                context.drawImage(video, 0, 0, width, height);
+                const imageData = context.getImageData(0, 0, width, height);
+                const qrResult = jsQR(imageData.data, width, height, {
+                  inversionAttempts: "attemptBoth",
+                });
+                const jsQrPayload = qrResult?.data?.trim();
+                if (jsQrPayload && !disposed) {
+                  onDetected(jsQrPayload);
+                  onClose();
+                }
+              }
+            } finally {
               scanning = false;
-            });
-        }, 500);
+            }
+          })();
+        }, 220);
       } catch (caught) {
         if (!disposed) {
-          setCameraError(
-            caught instanceof Error
-              ? caught.message
-              : "Não foi possível acessar a câmera.",
-          );
+          const errName =
+            caught instanceof DOMException ? caught.name : "";
+          const friendlyMessage =
+            errName === "NotAllowedError" || errName === "PermissionDeniedError"
+              ? "Permissão da câmera negada. Libere o acesso à câmera nas configurações do navegador e tente novamente."
+              : errName === "NotFoundError" || errName === "DevicesNotFoundError"
+                ? "Nenhuma câmera foi encontrada neste dispositivo."
+                : errName === "NotReadableError" || errName === "TrackStartError"
+                  ? "A câmera está sendo utilizada por outro aplicativo. Feche-o e tente novamente."
+                  : caught instanceof Error
+                    ? caught.message
+                    : "Não foi possível acessar a câmera.";
+          setCameraError(friendlyMessage);
           setStarting(false);
         }
       }
@@ -397,30 +533,75 @@ function QrCameraScanner({
       if (intervalId !== null) window.clearInterval(intervalId);
       stream?.getTracks().forEach((track) => track.stop());
     };
-  }, [onClose, onDetected]);
+  }, [onClose, onDetected, retryCount, selectedDeviceId]);
 
   return (
-    <div className="rounded-app-md border border-app-border bg-app-surface-elevated/40 p-3">
-      <video
-        ref={videoRef}
-        aria-label="Prévia da câmera para leitura do QR Code"
-        className="aspect-video w-full rounded-app-sm bg-black object-cover"
-        muted
-        playsInline
-      />
-      {starting ? (
-        <p className="mt-2 text-xs text-app-muted-foreground">
-          Iniciando câmera…
-        </p>
+    <div className="space-y-2.5 rounded-app-md border border-app-border bg-app-surface-elevated/40 p-3">
+      {devices.length > 1 ? (
+        <div className="flex items-center justify-between gap-2">
+          <label
+            htmlFor="checkin-camera-device"
+            className="text-xs font-semibold text-app-muted-foreground"
+          >
+            Selecionar câmera:
+          </label>
+          <select
+            id="checkin-camera-device"
+            value={selectedDeviceId}
+            onChange={(event) => setSelectedDeviceId(event.target.value)}
+            className={`${selectCls} max-w-xs`}
+          >
+            {devices.map((device) => (
+              <option key={device.deviceId} value={device.deviceId}>
+                {device.label}
+              </option>
+            ))}
+          </select>
+        </div>
       ) : null}
+
+      <div className="relative overflow-hidden rounded-app-sm bg-black">
+        <video
+          ref={videoRef}
+          aria-label="Prévia da câmera para leitura do QR Code"
+          className="aspect-video w-full object-cover"
+          muted
+          playsInline
+        />
+        {!starting && !cameraError ? (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center p-6"
+          >
+            <div className="h-44 w-44 rounded-xl border-2 border-dashed border-white/75 shadow-[0_0_0_9999px_rgba(0,0,0,0.28)] sm:h-52 sm:w-52" />
+          </div>
+        ) : null}
+      </div>
+
+      {starting ? (
+        <p className="text-xs text-app-muted-foreground">Iniciando câmera…</p>
+      ) : null}
+
       {cameraError ? (
-        <InlineAlert tone="danger" className="mt-3">
-          {cameraError}
+        <InlineAlert
+          tone="danger"
+          className="flex flex-wrap items-center justify-between gap-2"
+        >
+          <span>{cameraError}</span>
+          <Button
+            type="button"
+            compact
+            variant="secondary"
+            onClick={() => setRetryCount((current) => current + 1)}
+          >
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+            Tentar novamente
+          </Button>
         </InlineAlert>
       ) : (
-        <p className="mt-2 text-xs text-app-muted-foreground">
-          Mantenha o QR Code dentro do quadro. A câmera será fechada após a
-          leitura.
+        <p className="text-xs text-app-muted-foreground">
+          Posicione o QR Code dentro da área demarcada. A leitura e a validação
+          ocorrem automaticamente.
         </p>
       )}
     </div>
