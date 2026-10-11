@@ -15,7 +15,7 @@ import type {
   TransitionEventParams,
   UpdateEventDetailsParams,
 } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
-import { events, eventActivities, eventFormFields, registrations, ticketLots } from "@/server/infrastructure/persistence/schema";
+import { events, eventActivities, eventFormFields, registrationFiles, registrations, ticketLots } from "@/server/infrastructure/persistence/schema";
 import type { EventRow } from "@/server/infrastructure/persistence/schema";
 import type { Database } from "@/server/infrastructure/persistence/database";
 
@@ -161,14 +161,63 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
       }
 
       if (params.fields !== undefined) {
+        const existingFields = await transaction
+          .select()
+          .from(eventFormFields)
+          .where(eq(eventFormFields.eventId, params.eventId))
+          .orderBy(asc(eventFormFields.displayOrder));
+        const matchedFieldIds = new Set<string>();
+
+        for (const field of params.fields) {
+          const existingField = existingFields.find(
+            (item) => item.id === field.id && !matchedFieldIds.has(item.id),
+          );
+
+          if (existingField) {
+            matchedFieldIds.add(existingField.id);
+            await transaction
+              .update(eventFormFields)
+              .set({
+                label: field.label,
+                description: field.description,
+                type: field.type,
+                required: field.required,
+                options: field.options,
+                displayOrder: field.displayOrder,
+                active: true,
+                updatedAt: params.updatedAt,
+              })
+              .where(eq(eventFormFields.id, existingField.id));
+          } else {
+            await transaction
+              .insert(eventFormFields)
+              .values({ ...field, eventId: params.eventId, active: true });
+          }
+        }
+
         const [regCount] = await transaction
           .select({ value: count() })
           .from(registrations)
           .where(and(eq(registrations.eventId, params.eventId), isNull(registrations.deletedAt)));
-        if (Number(regCount?.value ?? 0) === 0) {
-          await transaction.delete(eventFormFields).where(eq(eventFormFields.eventId, params.eventId));
-          if (params.fields.length) {
-            await transaction.insert(eventFormFields).values(params.fields.map((field) => ({ ...field, eventId: params.eventId })));
+        const hasEventRegistrations = Number(regCount?.value ?? 0) > 0;
+
+        for (const existingField of existingFields) {
+          if (matchedFieldIds.has(existingField.id)) continue;
+          const [fileRef] = await transaction
+            .select({ value: count() })
+            .from(registrationFiles)
+            .where(eq(registrationFiles.fieldId, existingField.id));
+          const hasFileReference = Number(fileRef?.value ?? 0) > 0;
+
+          if (!hasEventRegistrations && !hasFileReference) {
+            await transaction
+              .delete(eventFormFields)
+              .where(eq(eventFormFields.id, existingField.id));
+          } else {
+            await transaction
+              .update(eventFormFields)
+              .set({ active: false, updatedAt: params.updatedAt })
+              .where(eq(eventFormFields.id, existingField.id));
           }
         }
       }
@@ -197,6 +246,7 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
         confirmed: sql<number>`count(*) filter (where ${registrations.status} = 'confirmada')`,
         reserved: sql<number>`count(*) filter (where ${registrations.status} in ('pendente', 'aguardando_pagamento') and ${registrations.reservationExpiresAt} > ${atIso})`,
         waitlisted: sql<number>`count(*) filter (where ${registrations.status} = 'lista_espera')`,
+        total: sql<number>`count(*)`,
       }).from(registrations).where(and(eq(registrations.eventId, eventId), isNull(registrations.deletedAt))),
     ]);
     const lots = await Promise.all(lotRows.map(async (lot) => {
@@ -214,7 +264,12 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
       props: toEventProps(params.row),
       createdAt: params.row.createdAt,
       updatedAt: params.row.updatedAt,
-      capacity: { confirmed: Number(total?.confirmed ?? 0), reserved: Number(total?.reserved ?? 0), waitlisted: Number(total?.waitlisted ?? 0) },
+      capacity: {
+        confirmed: Number(total?.confirmed ?? 0),
+        reserved: Number(total?.reserved ?? 0),
+        waitlisted: Number(total?.waitlisted ?? 0),
+        total: Number(total?.total ?? 0),
+      },
       lots,
       formFields: fieldRows.map((field) => ({ id: field.id, label: field.label, description: field.description, type: field.type, required: field.required, options: field.options, displayOrder: field.displayOrder })),
       activities: activityRows.map((activity) => ({ id: activity.id, title: activity.title, description: activity.description, speakerName: activity.speakerName, speakerBio: activity.speakerBio, room: activity.room, startAt: activity.startAt, endAt: activity.endAt })),

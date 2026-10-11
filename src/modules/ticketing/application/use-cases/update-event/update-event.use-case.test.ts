@@ -254,5 +254,54 @@ describe("UpdateEventUseCase", () => {
     expect(result.isFailure).toBe(true);
     expect(result.error.message).toContain("não encontrado");
   });
+
+  it("bloqueia redução da capacidade máxima abaixo do número de inscrições confirmadas", async () => {
+    currentEvent = {
+      ...createFakeEventReadModel({ status: "inscricoes_abertas", maxCapacity: 100 }),
+      capacity: { confirmed: 45, reserved: 2, waitlisted: 0, total: 47 },
+    };
+
+    const useCase = new UpdateEventUseCase({
+      eventRepository: mockEventRepo,
+      auditRepository: mockAuditRepo,
+      idGenerator: mockIdGen,
+    });
+
+    const result = await useCase.execute({
+      eventId: "event-123",
+      userId: "user-1",
+      userName: "Operador Teste",
+      canViewAll: false,
+      ip: null,
+      props: {
+        title: "Workshop de TypeScript",
+        description: "Um workshop completo sobre TypeScript e boas práticas de arquitetura.",
+        summary: "Workshop prático sobre TypeScript moderno.",
+        slug: "workshop-de-typescript",
+        bannerUrl: null,
+        modality: "online",
+        chargeType: "gratuito",
+        startAt: new Date("2026-11-10T14:00:00.000Z"),
+        endAt: new Date("2026-11-10T18:00:00.000Z"),
+        registrationStartAt: new Date("2026-10-01T00:00:00.000Z"),
+        registrationEndAt: new Date("2026-11-09T23:59:59.000Z"),
+        maxCapacity: 40,
+        allowsWaitlist: true,
+        onlineUrl: "https://zoom.us/j/123456",
+        address: null,
+        responsibleName: "Organizador Chefe",
+        responsibleEmail: "organizador@exemplo.com",
+        certificateEnabled: true,
+        workloadHours: 4,
+        certificateDescription: "Certificado de conclusão do workshop.",
+      },
+    });
+
+    expect(result.isFailure).toBe(true);
+    expect(result.error.message).toBe(
+      "A capacidade máxima não pode ser menor que a quantidade de inscrições já confirmadas (45).",
+    );
+    expect(auditLogs).toHaveLength(0);
+  });
 });
 

@@ -69,6 +69,13 @@ export class UpdateEventUseCase extends UseCase<UpdateEventInputDto, UpdateEvent
     if (current.props.status === "finalizado") {
       return Result.fail(new Error("Eventos finalizados não podem ser editados."));
     }
+    if (input.props.maxCapacity < current.capacity.confirmed) {
+      return Result.fail(
+        new Error(
+          `A capacidade máxima não pode ser menor que a quantidade de inscrições já confirmadas (${current.capacity.confirmed}).`,
+        ),
+      );
+    }
 
     const titleSlug = EventSlug.create(input.props.slug || input.props.title);
     if (titleSlug.isFailure) return Result.fail(titleSlug.error);

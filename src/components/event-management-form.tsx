@@ -3,6 +3,7 @@
 import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowLeft,
   FileImage,
   LoaderCircle,
@@ -13,6 +14,7 @@ import {
 import { ticketingApi } from "@/client/services/ticketing-api.service";
 import type { CreateEventRequest } from "@/client/services/ticketing-api.service";
 import { useAuth } from "@/components/auth-provider";
+import { Dialog } from "@/components/dialog";
 import {
   Button,
   Field,
@@ -111,7 +113,10 @@ type DateFieldParams = {
   label: string;
   key: "startAt" | "endAt" | "registrationStartAt" | "registrationEndAt";
 };
-type ValidateEventDraftParams = { draft: EventDraft };
+type ValidateEventDraftParams = {
+  draft: EventDraft;
+  confirmedCount?: number;
+};
 type EventDraftValidation = {
   request: CreateEventRequest | null;
   errors: Record<string, string>;
@@ -192,6 +197,10 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
   const auth = useAuth();
   const isEditing = Boolean(eventId);
   const [draft, setDraft] = useState<EventDraft>(createEmptyDraft);
+  const [initialFields, setInitialFields] = useState<FieldDraft[]>([]);
+  const [confirmedCount, setConfirmedCount] = useState(0);
+  const [totalRegistrations, setTotalRegistrations] = useState(0);
+  const [pendingRequest, setPendingRequest] = useState<CreateEventRequest | null>(null);
   const [loadingEvent, setLoadingEvent] = useState(isEditing);
   const [isFinalized, setIsFinalized] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -215,6 +224,22 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
         if (data.props.status === "finalizado") {
           setIsFinalized(true);
         }
+        const loadedFields: FieldDraft[] = data.formFields.map((field) => ({
+          rowId: field.id || createRowId(),
+          label: field.label,
+          description: field.description ?? "",
+          type: field.type,
+          required: field.required,
+          optionsText: (field.options || []).join("\n"),
+        }));
+        setInitialFields(loadedFields);
+        setConfirmedCount(data.capacity.confirmed);
+        setTotalRegistrations(
+          data.capacity.total ??
+            data.capacity.confirmed +
+              data.capacity.reserved +
+              data.capacity.waitlisted,
+        );
         setDraft({
           title: data.props.title,
           description: data.props.description,
@@ -249,14 +274,7 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
             startAt: toDatetimeLocalValue(lot.startAt),
             endAt: toDatetimeLocalValue(lot.endAt),
           })),
-          fields: data.formFields.map((field) => ({
-            rowId: field.id || createRowId(),
-            label: field.label,
-            description: field.description ?? "",
-            type: field.type,
-            required: field.required,
-            optionsText: (field.options || []).join("\n"),
-          })),
+          fields: loadedFields,
           activities: data.activities.map((act) => ({
             rowId: act.id || createRowId(),
             title: act.title,
@@ -438,11 +456,47 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
     }
   }
 
+  const fieldsChanged =
+    isEditing && hasCustomFieldsChanged(initialFields, draft.fields);
+
+  async function persistEvent(request: CreateEventRequest): Promise<void> {
+    setSaving(true);
+    try {
+      if (isEditing && eventId) {
+        const updated = await ticketingApi.updateEvent({
+          eventId,
+          request,
+        });
+        setPendingRequest(null);
+        setSuccess(`Evento “${updated.props.title}” atualizado com sucesso.`);
+        window.location.assign(`/painel/eventos/${updated.id}`);
+      } else {
+        const created = await ticketingApi.createEvent({
+          request,
+        });
+        setSuccess(`Evento “${created.props.title}” criado como rascunho.`);
+        window.location.assign(`/painel/eventos/${created.id}`);
+      }
+    } catch (caught) {
+      setPendingRequest(null);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível salvar o evento.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setError(null);
     setSuccess(null);
-    const validation = validateEventDraft({ draft });
+    const validation = validateEventDraft({
+      draft,
+      confirmedCount: isEditing ? confirmedCount : 0,
+    });
     setErrors(validation.errors);
     if (!validation.request) {
       setError("Revise os campos destacados e tente novamente.");
@@ -456,31 +510,11 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
       );
       return;
     }
-    setSaving(true);
-    try {
-      if (isEditing && eventId) {
-        const updated = await ticketingApi.updateEvent({
-          eventId,
-          request: validation.request,
-        });
-        setSuccess(`Evento “${updated.props.title}” atualizado com sucesso.`);
-        window.location.assign(`/painel/eventos/${updated.id}`);
-      } else {
-        const created = await ticketingApi.createEvent({
-          request: validation.request,
-        });
-        setSuccess(`Evento “${created.props.title}” criado como rascunho.`);
-        window.location.assign(`/painel/eventos/${created.id}`);
-      }
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Não foi possível salvar o evento.",
-      );
-    } finally {
-      setSaving(false);
+    if (isEditing && totalRegistrations > 0 && fieldsChanged) {
+      setPendingRequest(validation.request);
+      return;
     }
+    await persistEvent(validation.request);
   }
 
   if (!canWrite)
@@ -563,6 +597,7 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
           draft={draft}
           errors={errors}
           onChange={updateDraft}
+          confirmedCount={isEditing ? confirmedCount : 0}
         />
         {draft.modality === "presencial" ? (
           <EventAddressSection
@@ -586,6 +621,8 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
         />
         <CustomFieldsSection
           fields={draft.fields}
+          totalRegistrations={isEditing ? totalRegistrations : 0}
+          fieldsChanged={fieldsChanged}
           onAdd={addCustomField}
           onChange={updateCustomField}
           onRemove={(rowId) => removeRow({ kind: "field", rowId })}
@@ -619,6 +656,68 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
           </Button>
         </div>
       </form>
+
+      <Dialog
+        open={Boolean(pendingRequest)}
+        onClose={() => {
+          if (!saving) setPendingRequest(null);
+        }}
+        title="Atenção ao editar campos do formulário"
+        description={`Este evento já possui ${totalRegistrations} inscrição(ões) registrada(s).`}
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start gap-3 rounded-app-md border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-app-foreground">
+            <AlertTriangle
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-500"
+              aria-hidden="true"
+            />
+            <div className="space-y-1.5 leading-relaxed">
+              <p className="font-semibold">
+                A edição dos campos adicionais pode impactar as inscrições já
+                preenchidas.
+              </p>
+              <p className="text-app-muted-foreground">
+                As respostas enviadas anteriormente são preservadas no histórico
+                de cada inscrição, porém alterar rótulos, opções, tipos ou
+                adicionar/remover campos fará com que novas inscrições tenham um
+                formulário diferente das inscrições anteriores.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={saving}
+              onClick={() => setPendingRequest(null)}
+            >
+              Voltar e revisar
+            </Button>
+            <Button
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                if (pendingRequest) void persistEvent(pendingRequest);
+              }}
+            >
+              {saving ? (
+                <>
+                  <LoaderCircle
+                    className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                    aria-hidden="true"
+                  />
+                  Salvando alterações…
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                  Confirmar e salvar
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
@@ -832,13 +931,19 @@ function BasicEventSection({
   );
 }
 
-function EventScheduleSection({ draft, errors, onChange }: EventSectionProps) {
+function EventScheduleSection({
+  draft,
+  errors,
+  onChange,
+  confirmedCount = 0,
+}: EventSectionProps & { confirmedCount?: number }) {
   function change(
     event: ChangeEvent<HTMLInputElement>,
     field: keyof EventDraft,
   ): void {
     onChange({ field, value: event.target.value });
   }
+  const minCapacity = Math.max(1, confirmedCount);
   return (
     <Panel>
       <PanelHeader
@@ -901,16 +1006,22 @@ function EventScheduleSection({ draft, errors, onChange }: EventSectionProps) {
         <Field
           label="Capacidade máxima *"
           htmlFor="event-capacity"
+          hint={
+            confirmedCount > 0
+              ? `Mínimo permitido: ${confirmedCount} inscrição(ões) já confirmada(s).`
+              : undefined
+          }
           error={errors.maxCapacity}
         >
           <input
             id="event-capacity"
             type="number"
-            min="1"
+            min={minCapacity}
             step="1"
             value={draft.maxCapacity}
             onChange={(event) => change(event, "maxCapacity")}
             className={inputClass}
+            aria-invalid={Boolean(errors.maxCapacity)}
           />
         </Field>
       </div>
@@ -1199,11 +1310,15 @@ function TicketLotsSection({
 
 function CustomFieldsSection({
   fields,
+  totalRegistrations = 0,
+  fieldsChanged = false,
   onAdd,
   onChange,
   onRemove,
 }: {
   fields: FieldDraft[];
+  totalRegistrations?: number;
+  fieldsChanged?: boolean;
   onAdd: () => void;
   onChange: (params: CustomFieldChangeParams) => void;
   onRemove: (rowId: string) => void;
@@ -1221,6 +1336,28 @@ function CustomFieldsSection({
         }
       />
       <div className="space-y-4 p-4 sm:p-5">
+        {totalRegistrations > 0 ? (
+          <div
+            role="status"
+            className="flex items-start gap-2.5 rounded-app-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-app-foreground"
+          >
+            <AlertTriangle
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-500"
+              aria-hidden="true"
+            />
+            <div>
+              <p className="font-semibold">
+                Este evento já possui {totalRegistrations} inscrição(ões)
+                registrada(s).
+              </p>
+              <p className="mt-0.5 text-app-muted-foreground">
+                {fieldsChanged
+                  ? "Você alterou os campos do formulário. Ao salvar, você precisará confirmar esta alteração, pois mudanças nos campos podem impactar a padronização em relação às inscrições já preenchidas."
+                  : "A edição, adição ou remoção de campos é permitida, mas pode impactar a padronização em relação às inscrições já preenchidas."}
+              </p>
+            </div>
+          </div>
+        ) : null}
         {fields.length ? (
           fields.map((field, index) => (
             <div
@@ -1642,8 +1779,12 @@ function validateEventDraft(
     errors,
   });
   const maxCapacity = Number(draft.maxCapacity);
-  if (!Number.isInteger(maxCapacity) || maxCapacity <= 0)
+  const confirmedCount = params.confirmedCount ?? 0;
+  if (!Number.isInteger(maxCapacity) || maxCapacity <= 0) {
     errors.maxCapacity = "A capacidade precisa ser maior que zero.";
+  } else if (maxCapacity < confirmedCount) {
+    errors.maxCapacity = `A capacidade máxima não pode ser menor que a quantidade de inscrições já confirmadas (${confirmedCount}).`;
+  }
   const address =
     draft.modality === "presencial"
       ? {
@@ -1774,6 +1915,36 @@ function validateEventDraft(
     })),
   };
   return { request, errors };
+}
+
+function hasCustomFieldsChanged(
+  initial: FieldDraft[],
+  current: FieldDraft[],
+): boolean {
+  if (initial.length !== current.length) return true;
+  for (let index = 0; index < initial.length; index += 1) {
+    const a = initial[index];
+    const b = current[index];
+    if (
+      a.rowId !== b.rowId ||
+      a.label.trim() !== b.label.trim() ||
+      a.description.trim() !== b.description.trim() ||
+      a.type !== b.type ||
+      a.required !== b.required ||
+      normalizeOptionsText(a.optionsText) !== normalizeOptionsText(b.optionsText)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function normalizeOptionsText(value: string): string {
+  return value
+    .split(/\r?\n/)
+    .map((option) => option.trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 function parseDateTime(

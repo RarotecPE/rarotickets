@@ -3,7 +3,6 @@
 import { useEffect, useRef, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { btnGhost } from "@/components/ui";
 
 export type DialogProps = { open: boolean; onClose: () => void; title: string; description?: string; maxWidth?: string; children: ReactNode };
 type KeyboardTrapParams = { event: KeyboardEvent; dialog: HTMLDivElement; onClose: () => void };
@@ -37,7 +36,14 @@ export function Dialog({ open, onClose, title, description, maxWidth = "max-w-lg
     <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} className={cn("relative w-full rounded-app-lg border border-app-border bg-app-surface shadow-app-elevated", maxWidth)}>
       <div className="flex items-start justify-between gap-3 border-b border-app-border px-5 py-4">
         <div><h2 id={titleId} className="text-base font-bold text-app-foreground">{title}</h2>{description ? <p id={descriptionId} className="mt-1 text-xs text-app-muted-foreground">{description}</p> : null}</div>
-        <button type="button" onClick={onClose} className={cn(btnGhost, "h-8 w-8 shrink-0 p-0")} aria-label="Fechar janela"><X className="h-4 w-4" aria-hidden="true" /></button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-app-md text-app-muted-foreground transition-colors duration-150 hover:bg-app-surface-elevated hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-primary"
+          aria-label="Fechar janela"
+        >
+          <X className="h-5 w-5 shrink-0" aria-hidden="true" />
+        </button>
       </div>
       <div className="max-h-[75vh] overflow-y-auto px-5 py-4">{children}</div>
     </div>

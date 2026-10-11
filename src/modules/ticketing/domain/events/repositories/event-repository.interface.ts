@@ -31,7 +31,7 @@ export type EventActivityReadModel = {
   startAt: Date;
   endAt: Date;
 };
-export type EventCapacityReadModel = { confirmed: number; reserved: number; waitlisted: number };
+export type EventCapacityReadModel = { confirmed: number; reserved: number; waitlisted: number; total?: number };
 export type EventReadModel = {
   id: string;
   props: EventProps;
