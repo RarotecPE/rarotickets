@@ -95,7 +95,7 @@ export function PublicRegistrationConfirmationPage({
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [files, setFiles] = useState<Record<string, File>>({});
   const [lotId, setLotId] = useState("");
-  const [couponCode, setCouponCode] = useState("");
+  const [couponCode] = useState("");
   const [termsConsent, setTermsConsent] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
 
@@ -1126,20 +1126,6 @@ export function PublicRegistrationConfirmationPage({
                     </option>
                   ))}
                 </select>
-              </Field>
-
-              <Field
-                label="Cupom de desconto"
-                htmlFor="registration-coupon"
-                hint="Opcional. Cupons de desconto ou cortesia são validados no momento do envio."
-              >
-                <input
-                  id="registration-coupon"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                  placeholder="EX.: PROMO20"
-                  className={CUSTOM_INPUT_CLASS}
-                />
               </Field>
 
               <InlineAlert tone="info">
