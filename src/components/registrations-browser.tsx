@@ -3,12 +3,20 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
+  Award,
   Ban,
+  CalendarDays,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
+  Download,
+  Eye,
+  FileText,
   Search,
+  User,
   X,
 } from "lucide-react";
 import { ticketingApi } from "@/client/services/ticketing-api.service";
@@ -23,16 +31,18 @@ import {
   Panel,
   PanelHeader,
   Spinner,
+  btnSecondary,
   inputCls,
   textareaCls,
 } from "@/components/ui";
 import type { Tone } from "@/lib/constants";
 import type { EventReadModel } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
 import type {
+  RegistrationAnswerDetail,
   RegistrationListItem,
   RegistrationListResult,
 } from "@/modules/ticketing/domain/registrations/repositories/registration-repository.interface";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCpf, formatCurrency, formatDate, formatPhone } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 type RegistrationFilters = {
@@ -81,6 +91,9 @@ export function RegistrationsBrowser() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<RegistrationListItem | null>(
+    null,
+  );
+  const [detailTarget, setDetailTarget] = useState<RegistrationListItem | null>(
     null,
   );
   const [cancelReason, setCancelReason] = useState("");
@@ -483,6 +496,7 @@ export function RegistrationsBrowser() {
         <RegistrationTable
           items={result.items}
           canCancel={canCancel}
+          onSelectDetail={setDetailTarget}
           onCancel={setCancelTarget}
         />
       ) : (
@@ -533,6 +547,17 @@ export function RegistrationsBrowser() {
           </nav>
         </div>
       ) : null}
+
+      <RegistrationDetailModal
+        item={detailTarget}
+        canCancel={canCancel}
+        onClose={() => setDetailTarget(null)}
+        onRequestCancel={(item) => {
+          setDetailTarget(null);
+          setCancelTarget(item);
+        }}
+      />
+
       <Dialog
         open={Boolean(cancelTarget)}
         onClose={closeCancelDialog}
@@ -591,10 +616,12 @@ export function RegistrationsBrowser() {
 function RegistrationTable({
   items,
   canCancel,
+  onSelectDetail,
   onCancel,
 }: {
   items: RegistrationListItem[];
   canCancel: boolean;
+  onSelectDetail: (item: RegistrationListItem) => void;
   onCancel: (item: RegistrationListItem) => void;
 }) {
   return (
@@ -616,7 +643,7 @@ function RegistrationTable({
                 "Valor",
                 "Data",
                 "Check-in",
-                ...(canCancel ? ["Ações"] : []),
+                "Ações",
               ].map((heading) => (
                 <th
                   key={heading}
@@ -634,6 +661,7 @@ function RegistrationTable({
                 key={item.id}
                 item={item}
                 canCancel={canCancel}
+                onSelectDetail={onSelectDetail}
                 onCancel={onCancel}
               />
             ))}
@@ -647,16 +675,25 @@ function RegistrationTable({
 function RegistrationRow({
   item,
   canCancel,
+  onSelectDetail,
   onCancel,
 }: {
   item: RegistrationListItem;
   canCancel: boolean;
+  onSelectDetail: (item: RegistrationListItem) => void;
   onCancel: (item: RegistrationListItem) => void;
 }) {
   return (
     <tr className="border-b border-app-border last:border-0 hover:bg-app-surface-elevated/40">
-      <td className="px-4 py-3 font-mono text-xs font-semibold text-app-primary">
-        {item.code}
+      <td className="px-4 py-3 font-mono text-xs font-semibold">
+        <button
+          type="button"
+          onClick={() => onSelectDetail(item)}
+          className="cursor-pointer font-mono text-xs font-semibold text-app-primary underline-offset-2 hover:underline"
+          title="Ver detalhes completos da inscrição"
+        >
+          {item.code}
+        </button>
       </td>
       <td className="px-4 py-3">
         <p className="max-w-48 truncate text-sm font-semibold text-app-foreground">
@@ -692,9 +729,19 @@ function RegistrationRow({
           "—"
         )}
       </td>
-      {canCancel ? (
-        <td className="px-4 py-3">
-          {item.status !== "cancelada" ? (
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            compact
+            variant="secondary"
+            aria-label={`Ver detalhes da inscrição ${item.code}`}
+            onClick={() => onSelectDetail(item)}
+          >
+            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+            Detalhes
+          </Button>
+          {canCancel && item.status !== "cancelada" ? (
             <Button
               type="button"
               compact
@@ -705,13 +752,486 @@ function RegistrationRow({
               <Ban className="h-3.5 w-3.5" aria-hidden="true" />
               Cancelar
             </Button>
-          ) : (
-            <span className="text-xs text-app-muted-foreground">—</span>
-          )}
-        </td>
-      ) : null}
+          ) : null}
+        </div>
+      </td>
     </tr>
   );
+}
+
+function RegistrationDetailModal({
+  item,
+  canCancel,
+  onClose,
+  onRequestCancel,
+}: {
+  item: RegistrationListItem | null;
+  canCancel: boolean;
+  onClose: () => void;
+  onRequestCancel: (item: RegistrationListItem) => void;
+}) {
+  if (!item) return null;
+
+  return (
+    <Dialog
+      open={Boolean(item)}
+      onClose={onClose}
+      maxWidth="max-w-3xl"
+      title={`Inscrição ${item.code}`}
+      description={`${item.participantName} · ${item.eventTitle}`}
+    >
+      <div className="space-y-5">
+        {/* Cabeçalho de status e motivo de cancelamento */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-app-md border border-app-border bg-app-surface-elevated/60 p-3.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <RegistrationStatusBadge status={item.status} />
+            <span className="text-xs text-app-muted-foreground">
+              Realizada em{" "}
+              <strong className="text-app-foreground">
+                {formatDate({ value: item.createdAt, withTime: true })}
+              </strong>
+            </span>
+            {item.confirmedAt ? (
+              <span className="text-xs text-app-muted-foreground">
+                · Confirmada em{" "}
+                <strong className="text-app-foreground">
+                  {formatDate({ value: item.confirmedAt, withTime: true })}
+                </strong>
+              </span>
+            ) : null}
+          </div>
+          <Link
+            href={`/painel/eventos/${item.eventId}`}
+            className="text-xs font-semibold text-app-primary hover:underline"
+          >
+            Abrir evento →
+          </Link>
+        </div>
+
+        {(item.status === "cancelada" || item.cancellationReason) && (
+          <InlineAlert tone="danger">
+            <div className="space-y-1">
+              <p className="text-xs font-bold uppercase tracking-wide">
+                Motivo do cancelamento
+              </p>
+              <p className="text-sm">
+                {item.cancellationReason?.trim() ||
+                  "Cancelada sem justificativa detalhada registrada."}
+              </p>
+            </div>
+          </InlineAlert>
+        )}
+
+        {/* Seção 1: Dados do Participante */}
+        <section className="space-y-2.5 rounded-app-md border border-app-border bg-app-surface p-4">
+          <div className="flex items-center gap-2 border-b border-app-border pb-2.5">
+            <User className="h-4 w-4 text-app-primary" aria-hidden="true" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-app-foreground">
+              Dados do Participante
+            </h3>
+          </div>
+          <dl className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2 lg:grid-cols-3">
+            <DetailItem label="Nome completo" value={item.participantName} />
+            <DetailItem
+              label={item.cpf ? "CPF" : "Passaporte"}
+              value={
+                item.cpf
+                  ? formatCpf(item.cpf)
+                  : item.passport || "Não informado"
+              }
+              mono
+            />
+            <DetailItem label="E-mail" value={item.participantEmail} />
+            <DetailItem
+              label="Telefone"
+              value={
+                item.participantPhone
+                  ? formatPhone(item.participantPhone)
+                  : "—"
+              }
+            />
+            <DetailItem
+              label="Data de nascimento"
+              value={
+                item.participantBirthDate
+                  ? formatDate({ value: item.participantBirthDate })
+                  : "—"
+              }
+            />
+            <DetailItem
+              label="Empresa / Órgão"
+              value={item.participantCompany || "—"}
+            />
+            <DetailItem
+              label="Cargo / Função"
+              value={item.participantJobTitle || "—"}
+            />
+            <DetailItem
+              label="Termos e Privacidade (LGPD)"
+              value={item.termsConsent ? "Aceito" : "Pendente"}
+            />
+            <DetailItem
+              label="Comunicações / Marketing"
+              value={
+                item.marketingConsent ? "Autorizado (Opt-in)" : "Não autorizado"
+              }
+            />
+          </dl>
+        </section>
+
+        {/* Seção 2: Evento, Lote e Financeiro */}
+        <section className="space-y-2.5 rounded-app-md border border-app-border bg-app-surface p-4">
+          <div className="flex items-center gap-2 border-b border-app-border pb-2.5">
+            <CreditCard className="h-4 w-4 text-app-primary" aria-hidden="true" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-app-foreground">
+              Evento, Lote e Informações Financeiras
+            </h3>
+          </div>
+          <dl className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2 lg:grid-cols-3">
+            <DetailItem label="Evento" value={item.eventTitle} />
+            <DetailItem
+              label="Modalidade / Cobrança"
+              value={`${item.eventModality === "online" ? "Online" : "Presencial"} · ${item.eventChargeType === "pago" ? "Pago" : "Gratuito"}`}
+            />
+            <DetailItem
+              label="Início do evento"
+              value={formatDate({ value: item.eventStartAt, withTime: true })}
+            />
+            <DetailItem
+              label="Lote"
+              value={
+                item.lotName ||
+                (item.eventChargeType === "gratuito" ? "Gratuito" : "—")
+              }
+            />
+            <DetailItem
+              label="Valor original"
+              value={formatCurrency({ cents: item.originalCents })}
+            />
+            <DetailItem
+              label="Desconto aplicado"
+              value={
+                item.discountCents > 0
+                  ? `${formatCurrency({ cents: item.discountCents })}${item.couponCode ? ` (${item.couponCode})` : ""}`
+                  : "R$ 0,00"
+              }
+            />
+            <DetailItem
+              label="Valor final"
+              value={formatCurrency({ cents: item.finalCents })}
+              highlight
+            />
+            {item.reservationExpiresAt &&
+            (item.status === "pendente" ||
+              item.status === "aguardando_pagamento") ? (
+              <DetailItem
+                label="Reserva expira em"
+                value={formatDate({
+                  value: item.reservationExpiresAt,
+                  withTime: true,
+                })}
+              />
+            ) : null}
+            {item.waitlistExpiresAt && item.status === "pendente" ? (
+              <DetailItem
+                label="Prazo convocação fila"
+                value={formatDate({
+                  value: item.waitlistExpiresAt,
+                  withTime: true,
+                })}
+              />
+            ) : null}
+          </dl>
+
+          {item.payment ? (
+            <div className="mt-3 rounded-app-md border border-app-border bg-app-surface-elevated/50 p-3">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-app-muted-foreground">
+                Transação de Pagamento
+              </p>
+              <dl className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                <DetailItem
+                  label="Provedor"
+                  value={item.payment.provider.toUpperCase()}
+                />
+                <DetailItem
+                  label="Status financeiro"
+                  value={formatPaymentStatusLabel(item.payment.status)}
+                />
+                <DetailItem
+                  label="Método"
+                  value={item.payment.method || "—"}
+                />
+                <DetailItem
+                  label="ID da transação / Checkout"
+                  value={item.payment.externalId || "—"}
+                  mono
+                />
+                <DetailItem
+                  label="Pago em"
+                  value={
+                    item.payment.paidAt
+                      ? formatDate({
+                          value: item.payment.paidAt,
+                          withTime: true,
+                        })
+                      : "—"
+                  }
+                />
+                {item.payment.refundedCents > 0 || item.payment.refundedAt ? (
+                  <DetailItem
+                    label="Estorno"
+                    value={`${formatCurrency({ cents: item.payment.refundedCents })}${item.payment.refundReason ? ` — ${item.payment.refundReason}` : ""}`}
+                  />
+                ) : null}
+              </dl>
+            </div>
+          ) : null}
+        </section>
+
+        {/* Seção 3: Informações Adicionais (Formulário Customizado e Anexos) */}
+        <section className="space-y-2.5 rounded-app-md border border-app-border bg-app-surface p-4">
+          <div className="flex items-center gap-2 border-b border-app-border pb-2.5">
+            <FileText className="h-4 w-4 text-app-primary" aria-hidden="true" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-app-foreground">
+              Informações Adicionais do Formulário
+            </h3>
+          </div>
+          {item.answers.length === 0 ? (
+            <p className="py-1 text-xs text-app-muted-foreground">
+              Este evento não possui campos adicionais configurados ou nenhuma
+              resposta adicional foi registrada.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
+              {item.answers.map((answer) => (
+                <div
+                  key={answer.fieldId}
+                  className="rounded-app-md border border-app-border bg-app-surface-elevated/40 p-3"
+                >
+                  <p className="text-xs font-semibold text-app-muted-foreground">
+                    {answer.label}
+                  </p>
+                  <div className="mt-1 text-sm text-app-foreground">
+                    {renderAnswerValue(answer)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Seção 4: Credenciamento (Check-in) e Certificado */}
+        <section className="space-y-2.5 rounded-app-md border border-app-border bg-app-surface p-4">
+          <div className="flex items-center gap-2 border-b border-app-border pb-2.5">
+            <CalendarDays
+              className="h-4 w-4 text-app-primary"
+              aria-hidden="true"
+            />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-app-foreground">
+              Credenciamento (Check-in) e Certificado
+            </h3>
+          </div>
+          <div className="space-y-3 pt-1">
+            {item.checkIns.length === 0 ? (
+              <p className="text-xs text-app-muted-foreground">
+                Nenhum check-in registrado na portaria até o momento.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {item.checkIns.map((ci) => (
+                  <div
+                    key={ci.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-app-md border border-app-border bg-app-surface-elevated/40 px-3 py-2 text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2
+                        className="h-4 w-4 shrink-0 text-app-success"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <span className="font-semibold text-app-foreground">
+                          {ci.type === "reentrada_autorizada"
+                            ? "Reentrada autorizada"
+                            : "Check-in na portaria"}
+                        </span>
+                        <span className="text-app-muted-foreground">
+                          {" "}
+                          · Operador: {ci.operatorName}
+                        </span>
+                        {ci.justification ? (
+                          <p className="mt-0.5 text-app-muted-foreground">
+                            Justificativa: {ci.justification}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <span className="font-mono text-app-muted-foreground">
+                      {formatDate({ value: ci.happenedAt, withTime: true })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {item.certificate ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-app-md border border-app-success/30 bg-app-success/10 px-3 py-2.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <Award
+                    className="h-4 w-4 shrink-0 text-app-success"
+                    aria-hidden="true"
+                  />
+                  <div>
+                    <p className="font-semibold text-app-foreground">
+                      Certificado emitido ({item.certificate.workloadHours}h)
+                    </p>
+                    <p className="font-mono text-[11px] text-app-muted-foreground">
+                      Código: {item.certificate.code} · Emitido em{" "}
+                      {formatDate({
+                        value: item.certificate.issuedAt,
+                        withTime: true,
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href={`/certificados?code=${encodeURIComponent(item.certificate.code)}`}
+                  target="_blank"
+                  className="font-semibold text-app-primary hover:underline"
+                >
+                  Verificar certificado →
+                </Link>
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        {/* Rodapé de ações */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-app-border pt-3">
+          <div>
+            {canCancel && item.status !== "cancelada" ? (
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => onRequestCancel(item)}
+              >
+                <Ban className="h-4 w-4" aria-hidden="true" />
+                Cancelar inscrição
+              </Button>
+            ) : null}
+          </div>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            <X className="h-4 w-4" aria-hidden="true" />
+            Fechar
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+  mono = false,
+  highlight = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-medium text-app-muted-foreground">
+        {label}
+      </dt>
+      <dd
+        className={cn(
+          "mt-0.5 break-words text-xs font-semibold text-app-foreground",
+          mono && "font-mono",
+          highlight && "text-sm font-bold text-app-primary",
+        )}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function renderAnswerValue(answer: RegistrationAnswerDetail) {
+  if (answer.file) {
+    const sizeKb = Math.max(1, Math.round(answer.file.sizeBytes / 1024));
+    return (
+      <a
+        href={`/api/v1/admin/files/${encodeURIComponent(answer.file.id)}`}
+        target="_blank"
+        rel="noreferrer"
+        className={cn(btnSecondary, "mt-1 inline-flex h-8 gap-1.5 px-2.5 text-xs")}
+      >
+        <Download className="h-3.5 w-3.5" aria-hidden="true" />
+        <span className="max-w-[220px] truncate">{answer.file.originalName}</span>
+        <span className="text-[11px] text-app-muted-foreground">
+          ({sizeKb} KB)
+        </span>
+      </a>
+    );
+  }
+
+  const val = answer.value;
+  if (
+    val === null ||
+    val === undefined ||
+    val === "" ||
+    (Array.isArray(val) && val.length === 0)
+  ) {
+    return (
+      <span className="italic text-xs text-app-muted-foreground">
+        Não preenchido
+      </span>
+    );
+  }
+
+  if (typeof val === "boolean") {
+    return <span>{val ? "Sim" : "Não"}</span>;
+  }
+
+  if (Array.isArray(val)) {
+    return (
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        {val.map((option, idx) => (
+          <Badge key={`${answer.fieldId}-${idx}`} tone="muted">
+            {String(option)}
+          </Badge>
+        ))}
+      </div>
+    );
+  }
+
+  const text = String(val);
+  if (answer.type === "cpf") {
+    return <span className="font-mono">{formatCpf(text)}</span>;
+  }
+  if (answer.type === "telefone") {
+    return <span>{formatPhone(text)}</span>;
+  }
+  if (answer.type === "data" && /^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const [year, month, day] = text.split("-");
+    return <span>{`${day}/${month}/${year}`}</span>;
+  }
+
+  return <span className="whitespace-pre-wrap break-words">{text}</span>;
+}
+
+function formatPaymentStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    aguardando: "Aguardando pagamento",
+    pago: "Pago",
+    recusado: "Recusado",
+    cancelado: "Cancelado",
+    expirado: "Expirado",
+    estornado: "Estornado",
+  };
+  return labels[status] ?? status;
 }
 
 export function RegistrationStatusBadge({ status }: { status: string }) {

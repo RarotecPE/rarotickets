@@ -46,12 +46,15 @@ import type {
   PaymentWebhookUpdateParams,
   PaymentWebhookUpdateResult,
   PublicRegistrationResult,
+  RegistrationAnswerDetail,
+  RegistrationCheckInDetail,
   RegistrationListItem,
   RegistrationListResult,
 } from "@/modules/ticketing/domain/registrations/repositories/registration-repository.interface";
 import { PricingDomainService } from "@/modules/ticketing/domain/registrations/services/pricing.domain-service";
 import {
   events,
+  eventFormFields,
   coupons,
   participants,
   payments,
@@ -703,11 +706,19 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         registration: registrations,
         event: events,
         participant: participants,
+        lot: ticketLots,
+        coupon: coupons,
+        payment: payments,
+        certificate: certificates,
         checkin: checkins,
       })
       .from(registrations)
       .innerJoin(events, eq(registrations.eventId, events.id))
       .innerJoin(participants, eq(registrations.participantId, participants.id))
+      .leftJoin(ticketLots, eq(registrations.lotId, ticketLots.id))
+      .leftJoin(coupons, eq(registrations.couponId, coupons.id))
+      .leftJoin(payments, eq(registrations.id, payments.registrationId))
+      .leftJoin(certificates, eq(registrations.id, certificates.registrationId))
       .leftJoin(
         checkins,
         and(
@@ -719,22 +730,172 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
       .orderBy(desc(registrations.createdAt))
       .limit(Math.min(Math.max(params.pageSize, 1), 100))
       .offset(offset);
-    const items: RegistrationListItem[] = rows.map((row) => ({
-      id: row.registration.id,
-      code: row.registration.code,
-      eventId: row.event.id,
-      eventTitle: row.event.title,
-      participantId: row.participant.id,
-      participantName: row.participant.name,
-      participantEmail: row.participant.email,
-      participantPhone: row.participant.phone,
-      cpf: row.participant.cpf ?? "",
-      status: row.registration.status,
-      finalCents: row.registration.finalCents,
-      createdAt: row.registration.createdAt,
-      checkInAt: row.checkin?.happenedAt ?? null,
-      checkInBy: row.checkin?.operatorName ?? null,
-    }));
+
+    const pageRegistrationIds = rows.map((row) => row.registration.id);
+    const pageEventIds = Array.from(new Set(rows.map((row) => row.event.id)));
+
+    const [formFieldRows, fileRows, checkInRows] =
+      pageRegistrationIds.length > 0
+        ? await Promise.all([
+            this.database
+              .select()
+              .from(eventFormFields)
+              .where(inArray(eventFormFields.eventId, pageEventIds))
+              .orderBy(asc(eventFormFields.displayOrder), asc(eventFormFields.createdAt)),
+            this.database
+              .select()
+              .from(registrationFiles)
+              .where(inArray(registrationFiles.registrationId, pageRegistrationIds)),
+            this.database
+              .select()
+              .from(checkins)
+              .where(inArray(checkins.registrationId, pageRegistrationIds))
+              .orderBy(asc(checkins.happenedAt)),
+          ])
+        : [[], [], []];
+
+    const fieldsByEventId = new Map<string, (typeof formFieldRows)[number][]>();
+    for (const field of formFieldRows) {
+      const list = fieldsByEventId.get(field.eventId) ?? [];
+      list.push(field);
+      fieldsByEventId.set(field.eventId, list);
+    }
+
+    const filesByRegistrationId = new Map<string, (typeof fileRows)[number][]>();
+    for (const file of fileRows) {
+      const list = filesByRegistrationId.get(file.registrationId) ?? [];
+      list.push(file);
+      filesByRegistrationId.set(file.registrationId, list);
+    }
+
+    const checkInsByRegistrationId = new Map<string, RegistrationCheckInDetail[]>();
+    for (const ci of checkInRows) {
+      const list = checkInsByRegistrationId.get(ci.registrationId) ?? [];
+      list.push({
+        id: ci.id,
+        happenedAt: ci.happenedAt,
+        operatorName: ci.operatorName,
+        type: ci.type,
+        justification: ci.justification ?? null,
+      });
+      checkInsByRegistrationId.set(ci.registrationId, list);
+    }
+
+    const items: RegistrationListItem[] = rows.map((row) => {
+      const eventFields = fieldsByEventId.get(row.event.id) ?? [];
+      const regFiles = filesByRegistrationId.get(row.registration.id) ?? [];
+      const snapshot = row.registration.answersSnapshot ?? {};
+      const matchedFieldIds = new Set<string>();
+      const answers: RegistrationAnswerDetail[] = [];
+
+      for (const field of eventFields) {
+        matchedFieldIds.add(field.id);
+        const rawValue = snapshot[field.id];
+        const fileByField = regFiles.find((item) => item.fieldId === field.id);
+        const fileByRef =
+          !fileByField &&
+          typeof rawValue === "string" &&
+          rawValue.startsWith("file:")
+            ? regFiles.find((item) => item.id === rawValue.slice(5))
+            : undefined;
+        const matchedFile = fileByField ?? fileByRef ?? null;
+
+        answers.push({
+          fieldId: field.id,
+          label: field.label,
+          type: field.type,
+          value: rawValue ?? null,
+          file: matchedFile
+            ? {
+                id: matchedFile.id,
+                originalName: matchedFile.originalName,
+                mimeType: matchedFile.mimeType,
+                sizeBytes: matchedFile.sizeBytes,
+              }
+            : null,
+        });
+      }
+
+      for (const [key, rawValue] of Object.entries(snapshot)) {
+        if (matchedFieldIds.has(key)) continue;
+        const fileByRef =
+          typeof rawValue === "string" && rawValue.startsWith("file:")
+            ? regFiles.find((item) => item.id === rawValue.slice(5))
+            : regFiles.find((item) => item.fieldId === key);
+        answers.push({
+          fieldId: key,
+          label: `Campo adicional (${key.slice(0, 8)})`,
+          type: fileByRef ? "arquivo" : "texto",
+          value: rawValue ?? null,
+          file: fileByRef
+            ? {
+                id: fileByRef.id,
+                originalName: fileByRef.originalName,
+                mimeType: fileByRef.mimeType,
+                sizeBytes: fileByRef.sizeBytes,
+              }
+            : null,
+        });
+      }
+
+      return {
+        id: row.registration.id,
+        code: row.registration.code,
+        eventId: row.event.id,
+        eventTitle: row.event.title,
+        eventModality: row.event.modality,
+        eventChargeType: row.event.chargeType,
+        eventStartAt: row.event.startAt,
+        participantId: row.participant.id,
+        participantName: row.participant.name,
+        participantEmail: row.participant.email,
+        participantPhone: row.participant.phone,
+        cpf: row.participant.cpf ?? "",
+        passport: row.participant.passport ?? null,
+        participantBirthDate: row.participant.birthDate ?? null,
+        participantCompany: row.participant.company ?? null,
+        participantJobTitle: row.participant.jobTitle ?? null,
+        termsConsent: row.participant.termsConsent,
+        marketingConsent: row.participant.marketingConsent,
+        status: row.registration.status,
+        lotName: row.lot?.name ?? null,
+        couponCode: row.coupon?.code ?? null,
+        originalCents: row.registration.originalCents,
+        discountCents: row.registration.discountCents,
+        finalCents: row.registration.finalCents,
+        cancellationReason: row.registration.cancellationReason ?? null,
+        reservationExpiresAt: row.registration.reservationExpiresAt ?? null,
+        waitlistExpiresAt: row.registration.waitlistExpiresAt ?? null,
+        confirmedAt: row.registration.confirmedAt ?? null,
+        createdAt: row.registration.createdAt,
+        updatedAt: row.registration.updatedAt,
+        checkInAt: row.checkin?.happenedAt ?? null,
+        checkInBy: row.checkin?.operatorName ?? null,
+        checkIns: checkInsByRegistrationId.get(row.registration.id) ?? [],
+        payment: row.payment
+          ? {
+              id: row.payment.id,
+              provider: row.payment.provider,
+              status: row.payment.status,
+              method: row.payment.method ?? null,
+              amountCents: row.payment.amountCents,
+              externalId: row.payment.externalId ?? null,
+              paidAt: row.payment.paidAt ?? null,
+              refundedCents: row.payment.refundedCents,
+              refundReason: row.payment.refundReason ?? null,
+              refundedAt: row.payment.refundedAt ?? null,
+            }
+          : null,
+        certificate: row.certificate
+          ? {
+              code: row.certificate.authenticationCode,
+              workloadHours: row.certificate.workloadHours,
+              issuedAt: row.certificate.issuedAt,
+            }
+          : null,
+        answers,
+      };
+    });
     return { items, total: Number(totalRow?.value ?? 0) };
   }
 

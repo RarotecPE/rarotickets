@@ -116,21 +116,77 @@ export type ParticipantPortalView = {
   certificateIssuedAt: Date | null;
 };
 export type ListRegistrationsParams = { eventId?: string; eventIds?: string[]; query?: string; status?: string; page: number; pageSize: number; userId: string; canViewAll: boolean };
+export type RegistrationAnswerDetail = {
+  fieldId: string;
+  label: string;
+  type: string;
+  value: unknown;
+  file?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+  } | null;
+};
+export type RegistrationCheckInDetail = {
+  id: string;
+  happenedAt: Date;
+  operatorName: string;
+  type: string;
+  justification: string | null;
+};
 export type RegistrationListItem = {
   id: string;
   code: string;
   eventId: string;
   eventTitle: string;
+  eventModality: string;
+  eventChargeType: string;
+  eventStartAt: Date;
   participantId: string;
   participantName: string;
   participantEmail: string;
   participantPhone: string;
   cpf: string;
+  passport: string | null;
+  participantBirthDate: Date | null;
+  participantCompany: string | null;
+  participantJobTitle: string | null;
+  termsConsent: boolean;
+  marketingConsent: boolean;
   status: RegistrationStatus;
+  lotName: string | null;
+  couponCode: string | null;
+  originalCents: number;
+  discountCents: number;
   finalCents: number;
+  cancellationReason: string | null;
+  reservationExpiresAt: Date | null;
+  waitlistExpiresAt: Date | null;
+  confirmedAt: Date | null;
   createdAt: Date;
+  updatedAt: Date;
   checkInAt: Date | null;
   checkInBy: string | null;
+  checkIns: RegistrationCheckInDetail[];
+  payment: {
+    id: string;
+    provider: string;
+    status: string;
+    method: string | null;
+    amountCents: number;
+    externalId: string | null;
+    paidAt: Date | null;
+    refundedCents: number;
+    refundReason: string | null;
+    refundedAt: Date | null;
+  } | null;
+  certificate: {
+    code: string;
+    workloadHours: number;
+    issuedAt: Date;
+  } | null;
+  answers: RegistrationAnswerDetail[];
 };
 export type RegistrationListResult = { items: RegistrationListItem[]; total: number };
 export type RegistrationEventAccessParams = { eventId: string; userId: string; canViewAll: boolean };
