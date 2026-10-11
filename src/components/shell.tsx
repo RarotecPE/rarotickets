@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   ScanLine,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { Permission } from "@/modules/access/domain/services/role-permissions.domain-service";
@@ -302,8 +303,13 @@ function getStartPath(params: GetStartPathParams): string {
 
 function BrandMark() {
   return (
-    <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-app-md bg-app-primary">
-      <span className="font-black tracking-tighter text-white">RT</span>
-    </span>
+    <Image
+      src="/rarotickets-icone-black.png"
+      width={36}
+      height={36}
+      alt=""
+      priority
+      className="h-9 w-9 shrink-0 rounded-app-md"
+    />
   );
 }

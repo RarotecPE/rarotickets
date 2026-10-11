@@ -62,7 +62,7 @@ function PublicHeader() {
           aria-label="RaroTickets, página inicial"
         >
           <Image
-            src="/rarotickets-mark.svg"
+            src="/rarotickets-icone-black.png"
             width={36}
             height={36}
             alt=""

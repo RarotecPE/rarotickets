@@ -42,7 +42,7 @@ export function LoginPanel({ reason, nextPath, revocation = null }: LoginPanelPr
   const loginUrl = `/api/auth/raronexus/start?${new URLSearchParams({ mode: "interactive", next: nextPath }).toString()}`;
   return <main className="grid min-h-screen place-items-center bg-app-background px-4 py-8">
     <div className="w-full max-w-md">
-      <div className="mb-6 flex flex-col items-center text-center"><Image src="/rarotickets-mark.svg" width={64} height={64} alt="" priority className="mb-4 h-16 w-16 rounded-2xl" /><h1 className="text-2xl font-bold tracking-tight text-app-foreground">Acesso RaroTickets</h1><p className="mt-2 max-w-sm text-sm leading-relaxed text-app-muted-foreground">A equipe entra com sua conta corporativa RaroNexus. Não há senha local nesta aplicação.</p></div>
+      <div className="mb-6 flex flex-col items-center text-center"><Image src="/rarotickets-icone-black.png" width={64} height={64} alt="" priority className="mb-4 h-16 w-16 rounded-2xl" /><h1 className="text-2xl font-bold tracking-tight text-app-foreground">Acesso RaroTickets</h1><p className="mt-2 max-w-sm text-sm leading-relaxed text-app-muted-foreground">A equipe entra com sua conta corporativa RaroNexus. Não há senha local nesta aplicação.</p></div>
       <Panel className="p-5 sm:p-6">
         {message ? <InlineAlert tone={message.tone} className="mb-4">{message.text}</InlineAlert> : null}
         {error ? <InlineAlert tone="danger" className="mb-4">{error}</InlineAlert> : null}

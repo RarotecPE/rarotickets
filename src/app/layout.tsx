@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "RaroTickets — Eventos e inscrições", template: "%s · RaroTickets" },
   description: "Explore eventos, faça sua inscrição e acompanhe seus ingressos pelo RaroTickets.",
-  icons: { icon: [{ url: "/rarotickets-mark.svg", type: "image/svg+xml" }], shortcut: "/rarotickets-mark.svg" },
+  icons: { icon: [{ url: "/rarotickets-icone-black.png", type: "image/png" }], shortcut: "/rarotickets-icone-black.png", apple: "/rarotickets-icone-black.png" },
 };
 export const viewport: Viewport = { themeColor: "#f5f7fb", width: "device-width", initialScale: 1 };
 
