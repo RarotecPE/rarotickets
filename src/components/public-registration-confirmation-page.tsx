@@ -528,7 +528,7 @@ export function PublicRegistrationConfirmationPage({
           openPagSeguroPopup(result.checkoutUrl);
         } else {
           setPaymentNotice(
-            "Não foi possível abrir o checkout do PagBank automaticamente (verifique se o PAGBANK_TOKEN corresponde ao ambiente configurado). Clique em 'Abrir pagamento no PagSeguro' para tentar novamente.",
+            "Não foi possível abrir a janela de pagamento automaticamente. Clique em 'Abrir pagamento no PagSeguro' abaixo para continuar.",
           );
         }
       }
@@ -746,10 +746,12 @@ export function PublicRegistrationConfirmationPage({
                     );
                     openPagSeguroPopup(started.checkoutUrl);
                   } catch (caught) {
+                    console.error(
+                      "[PublicRegistrationConfirmationPage] Falha ao iniciar pagamento:",
+                      caught,
+                    );
                     setPaymentNotice(
-                      caught instanceof Error
-                        ? caught.message
-                        : "Não foi possível gerar o link de pagamento no PagBank.",
+                      "Não foi possível abrir o pagamento no momento. Por favor, aguarde alguns instantes e tente novamente.",
                     );
                   } finally {
                     setIsCheckingPayment(false);

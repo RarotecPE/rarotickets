@@ -190,7 +190,8 @@ export class CreatePublicRegistrationUseCase extends UseCase<CreatePublicRegistr
       });
       await this.registrationRepository.attachCheckout({ registrationId: created.registrationId, paymentId: created.paymentId, provider: checkout.provider, externalId: checkout.externalId, checkoutUrl: checkout.checkoutUrl, at: new Date() });
       return { ...created, paymentExternalId: checkout.externalId, checkoutUrl: checkout.checkoutUrl, shouldCreateCheckout: false };
-    } catch {
+    } catch (error) {
+      console.error("[CreatePublicRegistrationUseCase] Falha ao criar checkout inicial:", error);
       return { ...created, paymentExternalId: null, checkoutUrl: null, shouldCreateCheckout: false };
     }
   }

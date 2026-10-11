@@ -37,10 +37,9 @@ export class StartParticipantCheckoutUseCase extends UseCase<StartParticipantChe
       await this.registrationRepository.attachCheckout({ registrationId: details.registrationId, paymentId: details.paymentId, provider: checkout.provider, externalId: checkout.externalId, checkoutUrl: checkout.checkoutUrl, at: new Date() });
       return Result.ok({ checkoutUrl: checkout.checkoutUrl, expiresAt: details.expiresAt });
     } catch (error) {
+      console.error("[StartParticipantCheckoutUseCase] Falha ao iniciar checkout:", error);
       return Result.fail(
-        error instanceof Error
-          ? error
-          : new Error("Não foi possível iniciar o pagamento agora. Tente novamente antes do fim da reserva."),
+        new Error("Não foi possível iniciar o pagamento agora. Tente novamente antes do fim da reserva."),
       );
     }
   }

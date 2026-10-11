@@ -64,9 +64,22 @@ function buildRequestUrl(params: BuildRequestUrlParams): string {
 function parseApiError(params: ParseApiErrorParams): ApiError {
   const envelope = isRecord(params.payload) ? params.payload as ErrorEnvelope : null;
   const rawMessage = envelope?.error?.message ?? "A operação não foi concluída.";
-  const isTechnical = rawMessage.includes("Failed query") || rawMessage.includes("select \"");
+  const isTechnical =
+    params.status >= 500 ||
+    rawMessage.includes("Failed query") ||
+    rawMessage.includes("select \"") ||
+    rawMessage.includes("HTTP ") ||
+    rawMessage.includes("ECONN");
+  if (isTechnical) {
+    console.error("[ApiError]", {
+      status: params.status,
+      code: envelope?.error?.code,
+      message: rawMessage,
+      details: envelope?.error?.details,
+    });
+  }
   const message = isTechnical
-    ? "Não foi possível carregar as informações do servidor. Tente novamente em instantes."
+    ? "Não foi possível concluir a operação no momento. Tente novamente em instantes."
     : rawMessage;
   return new ApiError({ code: envelope?.error?.code ?? "API_ERROR", message, status: params.status, details: envelope?.error?.details });
 }

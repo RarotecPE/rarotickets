@@ -27,21 +27,11 @@ export function resultFailureResponse(params: ResultFailureParams): NextResponse
 
 export function internalErrorResponse(error: unknown): NextResponse<ApiFailureBody> {
   console.error("[InternalError]", error);
-  const rawMessage = error instanceof Error ? error.message : "";
-  const isDatabaseOrRawQuery =
-    rawMessage.includes("Failed query") ||
-    rawMessage.includes("ECONNRESET") ||
-    rawMessage.includes("ECONNREFUSED") ||
-    rawMessage.includes("syntax error");
-
-  const message = isDatabaseOrRawQuery
-    ? "Não foi possível processar as informações no momento. Tente novamente mais tarde."
-    : process.env.NODE_ENV === "production"
-      ? "Ocorreu um erro interno. Tente novamente."
-      : rawMessage || "Falha interna.";
-
-  const details = process.env.NODE_ENV !== "production" && rawMessage ? { technicalMessage: rawMessage } : undefined;
-  return jsonError({ code: "INTERNAL_ERROR", message, status: 500, details });
+  return jsonError({
+    code: "INTERNAL_ERROR",
+    message: "Não foi possível processar sua solicitação no momento. Tente novamente em instantes.",
+    status: 500,
+  });
 }
 
 export function authErrorResponse(error: AuthFailure): NextResponse<ApiFailureBody> {

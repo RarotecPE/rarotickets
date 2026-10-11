@@ -8,7 +8,8 @@ export class PagBankGateway extends PaymentGateway {
   async createCheckout(params: CreateCheckoutParams): Promise<PaymentCheckout> {
     const environment = readEnvironment();
     if (isPlaceholder(environment.pagBankToken)) {
-      throw new Error("PAGBANK_TOKEN não configurado.");
+      console.error("[PagBankGateway] PAGBANK_TOKEN não configurado.");
+      throw new Error("Não foi possível iniciar o pagamento no momento. Tente novamente em instantes.");
     }
     const phoneDigits = params.customer.phone.replace(/\D/g, "");
     const taxIdDigits = params.customer.taxId.replace(/\D/g, "");
@@ -69,15 +70,22 @@ export class PagBankGateway extends PaymentGateway {
     });
     const payload: unknown = await response.json().catch(() => null);
     if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error(
-          `Credencial do PagBank inválida (HTTP 401). Verifique se o PAGBANK_TOKEN corresponde ao ambiente configurado (${environment.pagBankBaseUrl}).`,
-        );
-      }
-      throw new Error(`PagBank recusou a criação do checkout (HTTP ${response.status}).`);
+      console.error("[PagBankGateway] Falha ao criar checkout no PagBank:", {
+        status: response.status,
+        baseUrl: environment.pagBankBaseUrl,
+        referenceId: params.referenceId,
+        payload,
+      });
+      throw new Error("Não foi possível iniciar o pagamento no momento. Tente novamente em instantes.");
     }
     const checkout = readCheckout(payload);
-    if (!checkout) throw new Error("A resposta do PagBank não contém um link seguro de checkout.");
+    if (!checkout) {
+      console.error("[PagBankGateway] Resposta do PagBank sem link de checkout:", {
+        referenceId: params.referenceId,
+        payload,
+      });
+      throw new Error("Não foi possível iniciar o pagamento no momento. Tente novamente em instantes.");
+    }
     return { ...checkout, provider: "pagbank" };
   }
 
