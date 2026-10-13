@@ -202,6 +202,13 @@ export function PublicRegistrationConfirmationPage({
               : null,
           eventTitle: found.eventTitle,
           accessToken: found.accessToken,
+          paymentMode:
+            event?.props.paymentMode ??
+            (found.paymentProvider === "pix_manual"
+              ? "pix_manual"
+              : "pagbank"),
+          pixCode: event?.props.pixCode,
+          pixQrCodeUrl: event?.props.pixQrCodeUrl,
         });
         if (found.status === "lista_espera") {
           setStep("waitlist");
@@ -211,6 +218,16 @@ export function PublicRegistrationConfirmationPage({
           found.status === "aguardando_pagamento" ||
           found.status === "pendente"
         ) {
+          if (found.reservationExpiresAt) {
+            const remaining = Math.max(
+              0,
+              Math.floor(
+                (new Date(found.reservationExpiresAt).getTime() - Date.now()) /
+                  1000,
+              ),
+            );
+            setSecondsRemaining(remaining);
+          }
           setStep("waiting_payment");
         }
       })
@@ -527,10 +544,21 @@ export function PublicRegistrationConfirmationPage({
         setStep("confirmed");
       } else {
         setStep("waiting_payment");
-        setSecondsRemaining(15 * 60);
         const isPixManual =
           result.paymentMode === "pix_manual" ||
           event?.props.paymentMode === "pix_manual";
+        if (result.reservationExpiresAt) {
+          const remaining = Math.max(
+            0,
+            Math.floor(
+              (new Date(result.reservationExpiresAt).getTime() - Date.now()) /
+                1000,
+            ),
+          );
+          setSecondsRemaining(remaining);
+        } else {
+          setSecondsRemaining(isPixManual ? 24 * 60 * 60 : 15 * 60);
+        }
         if (isPixManual) {
           // Inscrição com PIX Direto: o participante visualiza o QR Code e chave diretamente na tela
         } else if (result.checkoutUrl) {
@@ -542,6 +570,69 @@ export function PublicRegistrationConfirmationPage({
         }
       }
     } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.code === "DUPLICATE_EVENT_REGISTRATION"
+      ) {
+        try {
+          const myEvents = await participantApi.getMyEvents();
+          const found = myEvents.events.find(
+            (item) =>
+              (item.eventSlug === slug || (event && item.eventId === event.id)) &&
+              item.status !== "cancelada",
+          );
+          if (found) {
+            setRegistrationResult({
+              registrationId: found.registrationId,
+              registrationCode: found.registrationCode,
+              status: found.status,
+              finalCents: found.finalCents,
+              reservationExpiresAt: found.reservationExpiresAt,
+              participantUrl: `/ingressos/${found.accessToken}`,
+              checkoutUrl: found.checkoutUrl,
+              credentialUrl:
+                found.status === "confirmada"
+                  ? `/ingressos/${found.accessToken}`
+                  : null,
+              eventTitle: found.eventTitle,
+              accessToken: found.accessToken,
+              paymentMode:
+                event?.props.paymentMode ??
+                (found.paymentProvider === "pix_manual"
+                  ? "pix_manual"
+                  : "pagbank"),
+              pixCode: event?.props.pixCode,
+              pixQrCodeUrl: event?.props.pixQrCodeUrl,
+            });
+            if (found.status === "lista_espera") {
+              setStep("waitlist");
+              return;
+            } else if (found.status === "confirmada") {
+              setStep("confirmed");
+              return;
+            } else if (
+              found.status === "aguardando_pagamento" ||
+              found.status === "pendente"
+            ) {
+              if (found.reservationExpiresAt) {
+                const remaining = Math.max(
+                  0,
+                  Math.floor(
+                    (new Date(found.reservationExpiresAt).getTime() -
+                      Date.now()) /
+                      1000,
+                  ),
+                );
+                setSecondsRemaining(remaining);
+              }
+              setStep("waiting_payment");
+              return;
+            }
+          }
+        } catch {
+          // Mantém mensagem padrão de erro
+        }
+      }
       const apiErrors = readApiFieldErrors(caught);
       if (apiErrors) setFieldErrors(apiErrors);
       setGeneralError(
@@ -631,14 +722,19 @@ export function PublicRegistrationConfirmationPage({
       lot.soldCount < lot.maxQuantity,
   );
   const requiresLot = event.props.chargeType === "pago" && !isWaitlist;
+  const isPixManual = event.props.paymentMode === "pix_manual";
   const selectedLot = event.lots.find((lot) => lot.id === lotId);
 
   // STEP: WAITING PAYMENT (PagSeguro Popup open & polling OR PIX manual QR code)
   if (step === "waiting_payment" && registrationResult) {
-    const minutes = Math.floor(secondsRemaining / 60);
+    const hours = Math.floor(secondsRemaining / 3600);
+    const minutes = Math.floor((secondsRemaining % 3600) / 60);
     const seconds = secondsRemaining % 60;
-    const timeDisplay = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-    const isPixManual =
+    const timeDisplay =
+      hours > 0
+        ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+        : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    const isPixManualWaiting =
       registrationResult.paymentMode === "pix_manual" ||
       event.props.paymentMode === "pix_manual";
     const effectivePixCode =
@@ -646,7 +742,7 @@ export function PublicRegistrationConfirmationPage({
     const effectivePixQrCodeUrl =
       registrationResult.pixQrCodeUrl ?? event.props.pixQrCodeUrl;
 
-    if (isPixManual) {
+    if (isPixManualWaiting) {
       return (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
           <Panel className="overflow-hidden border-app-primary/30 shadow-lg">
@@ -733,7 +829,7 @@ export function PublicRegistrationConfirmationPage({
 
               <InlineAlert tone="info">
                 <p className="text-xs leading-relaxed">
-                  Após realizar o pagamento via PIX, a organização do evento fará a validação manual. Assim que aprovado, sua inscrição será ativada e a credencial será disponibilizada automaticamente nesta página e enviada por e-mail.
+                  Após realizar o pagamento via PIX, é só aguardar nossa confirmação. Assim que aprovado, sua inscrição será ativada e a credencial será disponibilizada automaticamente nesta página e enviada por e-mail.
                 </p>
               </InlineAlert>
 
@@ -1255,12 +1351,23 @@ export function PublicRegistrationConfirmationPage({
           <Panel>
             <PanelHeader
               title="Ingresso e pagamento"
-              description="Selecione o lote desejado para concluir sua compra com segurança via PagSeguro."
+              description={
+                isPixManual
+                  ? "Selecione o lote desejado para concluir sua inscrição via PIX Direto."
+                  : "Selecione o lote desejado para concluir sua compra com segurança via PagSeguro."
+              }
               right={
-                <Badge tone="muted" className="gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-app-success" aria-hidden="true" />
-                  Checkout PagSeguro
-                </Badge>
+                isPixManual ? (
+                  <Badge tone="primary" className="gap-1.5 py-1 text-xs">
+                    <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+                    PIX Direto
+                  </Badge>
+                ) : (
+                  <Badge tone="muted" className="gap-1">
+                    <ShieldCheck className="h-3.5 w-3.5 text-app-success" aria-hidden="true" />
+                    Checkout PagSeguro
+                  </Badge>
+                )
               }
             />
             <div className="space-y-4 p-4 sm:p-5">
@@ -1288,7 +1395,15 @@ export function PublicRegistrationConfirmationPage({
                 <span className="flex items-center gap-2">
                   <Clock3 className="h-4 w-4 shrink-0 text-app-primary" aria-hidden="true" />
                   <span>
-                    Após confirmar, sua vaga fica reservada temporariamente por <strong>15 minutos</strong> enquanto você conclui o pagamento na janela segura do PagSeguro (PIX, Cartão ou Boleto).
+                    {isPixManual ? (
+                      <>
+                        Após confirmar, sua vaga fica reservada temporariamente por <strong>24 horas</strong> enquanto você conclui o pagamento via PIX.
+                      </>
+                    ) : (
+                      <>
+                        Após confirmar, sua vaga fica reservada temporariamente por <strong>15 minutos</strong> enquanto você conclui o pagamento na janela segura do PagSeguro (PIX, Cartão ou Boleto).
+                      </>
+                    )}
                   </span>
                 </span>
               </InlineAlert>
@@ -1349,10 +1464,17 @@ export function PublicRegistrationConfirmationPage({
                 Confirmar entrada na lista de espera
               </>
             ) : requiresLot ? (
-              <>
-                <CreditCard className="h-5 w-5" aria-hidden="true" />
-                Prosseguir para pagamento no PagSeguro
-              </>
+              isPixManual ? (
+                <>
+                  <QrCode className="h-5 w-5" aria-hidden="true" />
+                  Confirmar inscrição e pagar via PIX
+                </>
+              ) : (
+                <>
+                  <CreditCard className="h-5 w-5" aria-hidden="true" />
+                  Prosseguir para pagamento no PagSeguro
+                </>
+              )
             ) : (
               <>
                 <TicketCheck className="h-5 w-5" aria-hidden="true" />
@@ -1363,7 +1485,9 @@ export function PublicRegistrationConfirmationPage({
 
           <p className="text-center text-xs text-app-muted-foreground">
             {requiresLot
-              ? "Você será direcionado a uma janela segura do PagSeguro (PagBank). Nenhum dado de cartão é armazenado em nossos servidores."
+              ? isPixManual
+                ? "Você visualizará o QR Code e o código PIX Copia e Cola para realizar o pagamento diretamente no app do seu banco."
+                : "Você será direcionado a uma janela segura do PagSeguro (PagBank). Nenhum dado de cartão é armazenado em nossos servidores."
               : "Sua vaga será confirmada imediatamente e sua credencial ficará disponível."}
           </p>
         </div>

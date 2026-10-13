@@ -253,7 +253,7 @@ export function ParticipantPortal({ accessToken }: ParticipantPortalProps) {
               description={
                 portal.waitlistExpiresAt
                   ? "Uma vaga foi liberada para você. Realize o PIX em até 24 horas."
-                  : "A reserva temporária da vaga tem duração de 15 minutos."
+                  : "A reserva temporária da vaga tem duração de 24 horas."
               }
               right={
                 <Badge tone="primary" className="gap-1.5 py-1 text-xs">
@@ -334,7 +334,7 @@ export function ParticipantPortal({ accessToken }: ParticipantPortalProps) {
 
               <InlineAlert tone="info">
                 <p className="text-xs leading-relaxed">
-                  Após realizar o pagamento via PIX, a organização do evento fará a conferência manual. Assim que aprovado, sua credencial será liberada automaticamente nesta página.
+                  Após realizar o pagamento via PIX, é só aguardar nós confirmarmos o pagamento. Assim que aprovado, sua credencial será liberada automaticamente nesta página.
                 </p>
               </InlineAlert>
 

@@ -88,6 +88,7 @@ export type ParticipantEventItem = {
   paymentExternalId?: string | null;
   certificateCode: string | null;
   certificateIssuedAt: Date | null;
+  createdAt: Date;
 };
 
 export interface ParticipantAuthRepository {

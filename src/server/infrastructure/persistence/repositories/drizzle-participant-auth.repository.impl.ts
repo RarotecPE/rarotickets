@@ -370,7 +370,7 @@ export class DrizzleParticipantAuthRepository implements ParticipantAuthReposito
           isNull(events.deletedAt),
         ),
       )
-      .orderBy(desc(events.startAt), desc(registrations.createdAt));
+      .orderBy(desc(registrations.createdAt));
 
     return rows.map((row) => {
       const isConfirmed = row.registration.status === "confirmada";
@@ -408,6 +408,7 @@ export class DrizzleParticipantAuthRepository implements ParticipantAuthReposito
         paymentExternalId: row.payment?.externalId ?? null,
         certificateCode: row.certificate?.authenticationCode ?? null,
         certificateIssuedAt: row.certificate?.issuedAt ?? null,
+        createdAt: row.registration.createdAt,
       };
     });
   }

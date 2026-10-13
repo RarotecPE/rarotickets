@@ -53,7 +53,12 @@ export function ParticipantDashboard() {
     async function fetchEvents() {
       try {
         const response = await participantApi.getMyEvents();
-        if (active) setEvents(response.events);
+        const sorted = [...response.events].sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeB - timeA;
+        });
+        if (active) setEvents(sorted);
       } catch (caught) {
         if (active) {
           setError(
@@ -276,6 +281,12 @@ function ParticipantEventCard({ item }: { item: ParticipantEventItem }) {
                 </>
               )}
             </span>
+            {item.createdAt && (
+              <span className="inline-flex items-center gap-1">
+                <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                Inscrito em {formatDate({ value: item.createdAt, withTime: true })}
+              </span>
+            )}
           </div>
         </div>
 
@@ -313,6 +324,16 @@ function ParticipantEventCard({ item }: { item: ParticipantEventItem }) {
         )}
 
         {/* Botão de Pagamento se pendente */}
+        {isPendingPayment && item.paymentProvider === "pix_manual" && item.accessToken && (
+          <Link
+            href={`/ingressos/${item.accessToken}`}
+            className={`${btnSecondary} h-8 gap-1.5 px-3 text-xs`}
+          >
+            <QrCode className="h-3.5 w-3.5 text-app-primary" aria-hidden="true" />
+            Pagar via PIX
+            <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+          </Link>
+        )}
         {isPendingPayment && item.checkoutUrl && (
           <a
             href={item.checkoutUrl}

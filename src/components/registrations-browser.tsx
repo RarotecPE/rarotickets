@@ -729,7 +729,7 @@ function RegistrationTable({
         title="Registros"
         description={`${items.length} nesta página`}
       />
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto min-h-[320px]">
         <table className="w-full min-w-[980px] text-left">
           <caption className="sr-only">Inscrições de eventos</caption>
           <thead>
@@ -747,7 +747,10 @@ function RegistrationTable({
                 <th
                   key={heading}
                   scope="col"
-                  className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-app-muted-foreground"
+                  className={cn(
+                    "px-4 py-3 text-xs font-semibold uppercase tracking-wide text-app-muted-foreground",
+                    heading === "Ações" && "text-right",
+                  )}
                 >
                   {heading}
                 </th>
@@ -834,48 +837,139 @@ function RegistrationRow({
           "—"
         )}
       </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1.5">
-          {canManage &&
-          (item.status === "aguardando_pagamento" ||
-            item.status === "pendente") ? (
-            <Button
-              type="button"
-              compact
-              variant="primary"
-              aria-label={`Confirmar pagamento da inscrição ${item.code}`}
-              title="Confirmar pagamento manualmente"
-              onClick={() => onConfirmPayment(item)}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-              Confirmar
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            compact
-            variant="secondary"
-            aria-label={`Ver detalhes da inscrição ${item.code}`}
-            onClick={() => onSelectDetail(item)}
-          >
-            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-            Detalhes
-          </Button>
-          {canCancel && item.status !== "cancelada" ? (
-            <Button
-              type="button"
-              compact
-              variant="secondary"
-              aria-label={`Cancelar inscrição ${item.code}`}
-              onClick={() => onCancel(item)}
-            >
-              <Ban className="h-3.5 w-3.5" aria-hidden="true" />
-              Cancelar
-            </Button>
-          ) : null}
-        </div>
+      <td className="px-4 py-3 text-right">
+        <RegistrationActionsDropdown
+          item={item}
+          canCancel={canCancel}
+          canManage={canManage}
+          onSelectDetail={onSelectDetail}
+          onCancel={onCancel}
+          onConfirmPayment={onConfirmPayment}
+        />
       </td>
     </tr>
+  );
+}
+
+function RegistrationActionsDropdown({
+  item,
+  canCancel,
+  canManage,
+  onSelectDetail,
+  onCancel,
+  onConfirmPayment,
+}: {
+  item: RegistrationListItem;
+  canCancel: boolean;
+  canManage: boolean;
+  onSelectDetail: (item: RegistrationListItem) => void;
+  onCancel: (item: RegistrationListItem) => void;
+  onConfirmPayment: (item: RegistrationListItem) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const canConfirmManual =
+    canManage &&
+    (item.status === "aguardando_pagamento" || item.status === "pendente");
+  const canCancelRegistration = canCancel && item.status !== "cancelada";
+
+  return (
+    <div ref={dropdownRef} className="relative inline-block text-left">
+      <Button
+        type="button"
+        compact
+        variant="secondary"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Ações para a inscrição ${item.code}`}
+        onClick={() => setOpen((prev) => !prev)}
+        className="gap-1.5"
+      >
+        <span>Ações</span>
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 text-app-muted-foreground transition-transform duration-150",
+            open && "rotate-180",
+          )}
+          aria-hidden="true"
+        />
+      </Button>
+
+      {open ? (
+        <div
+          role="menu"
+          aria-orientation="vertical"
+          className="absolute right-0 top-full z-40 mt-1.5 w-48 origin-top-right rounded-app-md border border-app-border bg-app-surface p-1 shadow-lg ring-1 ring-black/5 dark:ring-white/10"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onSelectDetail(item);
+            }}
+            className="flex w-full items-center gap-2 rounded-app-sm px-2.5 py-2 text-left text-xs font-medium text-app-foreground transition-colors hover:bg-app-surface-elevated hover:text-app-primary"
+          >
+            <Eye className="h-3.5 w-3.5 text-app-muted-foreground" aria-hidden="true" />
+            Ver detalhes
+          </button>
+
+          {canConfirmManual ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onConfirmPayment(item);
+              }}
+              className="flex w-full items-center gap-2 rounded-app-sm px-2.5 py-2 text-left text-xs font-medium text-app-primary transition-colors hover:bg-app-primary/10"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 text-app-primary" aria-hidden="true" />
+              Confirmar pagamento
+            </button>
+          ) : null}
+
+          {canCancelRegistration ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onCancel(item);
+              }}
+              className="flex w-full items-center gap-2 rounded-app-sm px-2.5 py-2 text-left text-xs font-medium text-app-danger transition-colors hover:bg-app-danger/10"
+            >
+              <Ban className="h-3.5 w-3.5 text-app-danger" aria-hidden="true" />
+              Cancelar inscrição
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

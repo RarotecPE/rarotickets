@@ -314,6 +314,10 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         const calculated = pricingResult.value;
         const isFree =
           event.chargeType === "gratuito" || calculated.finalCents === 0;
+        const reservationTtlMs =
+          event.paymentMode === "pix_manual"
+            ? 24 * 60 * 60 * 1000
+            : 15 * 60 * 1000;
         draft = {
           lotId: lot?.id ?? null,
           couponId: coupon?.id ?? null,
@@ -323,7 +327,7 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
           finalCents: calculated.finalCents,
           reservationExpiresAt: isFree
             ? null
-            : new Date(params.at.getTime() + 15 * 60 * 1000),
+            : new Date(params.at.getTime() + reservationTtlMs),
           paymentId: null,
         };
       }
