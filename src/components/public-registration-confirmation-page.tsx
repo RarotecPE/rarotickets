@@ -833,6 +833,31 @@ export function PublicRegistrationConfirmationPage({
                 </p>
               </InlineAlert>
 
+              {event.props.pixBankName || event.props.pixBankAccountHolder || event.props.pixBankCnpj ? (
+                <div className="rounded-app-md border border-app-border bg-app-surface p-4 text-xs space-y-2">
+                  <p className="font-semibold text-app-foreground uppercase tracking-wider text-[11px]">
+                    Dados Bancários para Transferência / PIX
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-app-muted-foreground">
+                    {event.props.pixBankName ? (
+                      <p><strong>Banco:</strong> {event.props.pixBankName}</p>
+                    ) : null}
+                    {event.props.pixBankAgency ? (
+                      <p><strong>Agência:</strong> {event.props.pixBankAgency}</p>
+                    ) : null}
+                    {event.props.pixBankAccount ? (
+                      <p><strong>Conta:</strong> {event.props.pixBankAccount} {event.props.pixBankAccountType ? `(${event.props.pixBankAccountType})` : ""}</p>
+                    ) : null}
+                    {event.props.pixBankCnpj ? (
+                      <p><strong>CNPJ:</strong> {event.props.pixBankCnpj}</p>
+                    ) : null}
+                    {event.props.pixBankAccountHolder ? (
+                      <p className="sm:col-span-2"><strong>Favorecido:</strong> {event.props.pixBankAccountHolder}</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-1 gap-3 rounded-app-md border border-app-border bg-app-surface-elevated/60 p-4 sm:grid-cols-3">
                 <div>
                   <p className="text-xs text-app-muted-foreground">Inscrição</p>

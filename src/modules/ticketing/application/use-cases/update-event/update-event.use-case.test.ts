@@ -1,8 +1,45 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { UpdateEventUseCase } from "./update-event.use-case";
+import type { EventEditableProps } from "./update-event.use-case";
 import type { EventReadModel, EventRepository } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
 import type { IAuditRepository, AuditRecord } from "@/modules/ticketing/domain/repositories/audit-repository.interface";
 import type { IIdGenerator } from "@/@core/domain/id-generator.interface";
+
+function createFakeEventEditableProps(overrides?: Partial<EventEditableProps>): EventEditableProps {
+  return {
+    title: "Workshop de TypeScript Avançado",
+    description: "Nova descrição detalhada com mais de 20 caracteres necessários.",
+    summary: "Novo resumo curto do evento atualizado.",
+    slug: "workshop-de-typescript-avancado",
+    bannerUrl: null,
+    modality: "online",
+    chargeType: "gratuito",
+    paymentMode: "pagbank",
+    pixCode: null,
+    pixQrCodeUrl: null,
+    pixBankName: null,
+    pixBankAgency: null,
+    pixBankAccount: null,
+    pixBankAccountType: null,
+    pixBankCnpj: null,
+    pixBankAccountHolder: null,
+    pixNotificationEmail: null,
+    startAt: new Date("2026-11-10T14:00:00.000Z"),
+    endAt: new Date("2026-11-10T18:00:00.000Z"),
+    registrationStartAt: new Date("2026-10-01T00:00:00.000Z"),
+    registrationEndAt: new Date("2026-11-09T23:59:59.000Z"),
+    maxCapacity: 150,
+    allowsWaitlist: true,
+    onlineUrl: "https://zoom.us/j/999999",
+    address: null,
+    responsibleName: "Organizador Chefe",
+    responsibleEmail: "organizador@exemplo.com",
+    certificateEnabled: true,
+    workloadHours: 4,
+    certificateDescription: "Certificado de conclusão.",
+    ...overrides,
+  };
+}
 
 function createFakeEventReadModel(overrides?: Partial<EventReadModel["props"]>): EventReadModel {
   return {
@@ -18,6 +55,13 @@ function createFakeEventReadModel(overrides?: Partial<EventReadModel["props"]>):
       paymentMode: "pagbank",
       pixCode: null,
       pixQrCodeUrl: null,
+      pixBankName: null,
+      pixBankAgency: null,
+      pixBankAccount: null,
+      pixBankAccountType: null,
+      pixBankCnpj: null,
+      pixBankAccountHolder: null,
+      pixNotificationEmail: null,
       status: "rascunho",
       startAt: new Date("2026-11-10T14:00:00.000Z"),
       endAt: new Date("2026-11-10T18:00:00.000Z"),
@@ -98,31 +142,7 @@ describe("UpdateEventUseCase", () => {
       userName: "Operador Teste",
       canViewAll: false,
       ip: "127.0.0.1",
-      props: {
-        title: "Workshop de TypeScript Avançado",
-        description: "Nova descrição detalhada com mais de 20 caracteres necessários.",
-        summary: "Novo resumo curto do evento atualizado.",
-        slug: "workshop-de-typescript-avancado",
-        bannerUrl: null,
-        modality: "online",
-        chargeType: "gratuito",
-        paymentMode: "pagbank",
-        pixCode: null,
-        pixQrCodeUrl: null,
-        startAt: new Date("2026-11-10T14:00:00.000Z"),
-        endAt: new Date("2026-11-10T18:00:00.000Z"),
-        registrationStartAt: new Date("2026-10-01T00:00:00.000Z"),
-        registrationEndAt: new Date("2026-11-09T23:59:59.000Z"),
-        maxCapacity: 150,
-        allowsWaitlist: true,
-        onlineUrl: "https://zoom.us/j/999999",
-        address: null,
-        responsibleName: "Organizador Chefe",
-        responsibleEmail: "organizador@exemplo.com",
-        certificateEnabled: true,
-        workloadHours: 4,
-        certificateDescription: "Certificado de conclusão.",
-      },
+      props: createFakeEventEditableProps(),
     });
 
     expect(result.isSuccess).toBe(true);
@@ -146,31 +166,17 @@ describe("UpdateEventUseCase", () => {
       userName: "Operador Teste",
       canViewAll: false,
       ip: null,
-      props: {
+      props: createFakeEventEditableProps({
         title: "Workshop de TypeScript Aberto",
         description: "Descrição detalhada do evento que continua aceitando alterações.",
         summary: "Resumo curto válido com mais de dez letras.",
         slug: "workshop-aberto",
-        bannerUrl: null,
-        modality: "online",
-        chargeType: "gratuito",
-        paymentMode: "pagbank",
-        pixCode: null,
-        pixQrCodeUrl: null,
-        startAt: new Date("2026-11-10T14:00:00.000Z"),
-        endAt: new Date("2026-11-10T18:00:00.000Z"),
-        registrationStartAt: new Date("2026-10-01T00:00:00.000Z"),
-        registrationEndAt: new Date("2026-11-09T23:59:59.000Z"),
         maxCapacity: 200,
         allowsWaitlist: false,
-        onlineUrl: "https://zoom.us/j/999999",
-        address: null,
-        responsibleName: "Organizador Chefe",
-        responsibleEmail: "organizador@exemplo.com",
         certificateEnabled: false,
         workloadHours: 0,
         certificateDescription: null,
-      },
+      }),
     });
 
     expect(result.isSuccess).toBe(true);
@@ -192,31 +198,18 @@ describe("UpdateEventUseCase", () => {
       userName: "Operador Teste",
       canViewAll: false,
       ip: null,
-      props: {
+      props: createFakeEventEditableProps({
         title: "Tentativa de Edição",
         description: "Descrição de teste para evento finalizado bloqueado.",
         summary: "Resumo curto de teste válido.",
         slug: "tentativa-edicao",
-        bannerUrl: null,
-        modality: "online",
-        chargeType: "gratuito",
-        paymentMode: "pagbank",
-        pixCode: null,
-        pixQrCodeUrl: null,
-        startAt: new Date("2026-11-10T14:00:00.000Z"),
-        endAt: new Date("2026-11-10T18:00:00.000Z"),
-        registrationStartAt: new Date("2026-10-01T00:00:00.000Z"),
-        registrationEndAt: new Date("2026-11-09T23:59:59.000Z"),
         maxCapacity: 100,
         allowsWaitlist: false,
         onlineUrl: "https://zoom.us/j/123",
-        address: null,
-        responsibleName: "Organizador Chefe",
-        responsibleEmail: "organizador@exemplo.com",
         certificateEnabled: false,
         workloadHours: 0,
         certificateDescription: null,
-      },
+      }),
     });
 
     expect(result.isFailure).toBe(true);
@@ -239,31 +232,18 @@ describe("UpdateEventUseCase", () => {
       userName: "Operador Teste",
       canViewAll: false,
       ip: null,
-      props: {
+      props: createFakeEventEditableProps({
         title: "Evento Fantasma",
         description: "Descrição detalhada do evento que não existe no banco.",
         summary: "Resumo do evento inexistente.",
         slug: "evento-fantasma",
-        bannerUrl: null,
-        modality: "online",
-        chargeType: "gratuito",
-        paymentMode: "pagbank",
-        pixCode: null,
-        pixQrCodeUrl: null,
-        startAt: new Date("2026-11-10T14:00:00.000Z"),
-        endAt: new Date("2026-11-10T18:00:00.000Z"),
-        registrationStartAt: new Date("2026-10-01T00:00:00.000Z"),
-        registrationEndAt: new Date("2026-11-09T23:59:59.000Z"),
         maxCapacity: 100,
         allowsWaitlist: false,
         onlineUrl: "https://zoom.us/j/123",
-        address: null,
-        responsibleName: "Organizador Chefe",
-        responsibleEmail: "organizador@exemplo.com",
         certificateEnabled: false,
         workloadHours: 0,
         certificateDescription: null,
-      },
+      }),
     });
 
     expect(result.isFailure).toBe(true);
@@ -288,31 +268,9 @@ describe("UpdateEventUseCase", () => {
       userName: "Operador Teste",
       canViewAll: false,
       ip: null,
-      props: {
-        title: "Workshop de TypeScript",
-        description: "Um workshop completo sobre TypeScript e boas práticas de arquitetura.",
-        summary: "Workshop prático sobre TypeScript moderno.",
-        slug: "workshop-de-typescript",
-        bannerUrl: null,
-        modality: "online",
-        chargeType: "gratuito",
-        paymentMode: "pagbank",
-        pixCode: null,
-        pixQrCodeUrl: null,
-        startAt: new Date("2026-11-10T14:00:00.000Z"),
-        endAt: new Date("2026-11-10T18:00:00.000Z"),
-        registrationStartAt: new Date("2026-10-01T00:00:00.000Z"),
-        registrationEndAt: new Date("2026-11-09T23:59:59.000Z"),
+      props: createFakeEventEditableProps({
         maxCapacity: 40,
-        allowsWaitlist: true,
-        onlineUrl: "https://zoom.us/j/123456",
-        address: null,
-        responsibleName: "Organizador Chefe",
-        responsibleEmail: "organizador@exemplo.com",
-        certificateEnabled: true,
-        workloadHours: 4,
-        certificateDescription: "Certificado de conclusão do workshop.",
-      },
+      }),
     });
 
     expect(result.isFailure).toBe(true);

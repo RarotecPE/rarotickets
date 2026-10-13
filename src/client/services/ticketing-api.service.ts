@@ -45,6 +45,12 @@ export type PublicRegistrationResult = {
   paymentMode?: string | null;
   pixCode?: string | null;
   pixQrCodeUrl?: string | null;
+  pixBankName?: string | null;
+  pixBankAgency?: string | null;
+  pixBankAccount?: string | null;
+  pixBankAccountType?: string | null;
+  pixBankCnpj?: string | null;
+  pixBankAccountHolder?: string | null;
 };
 export type ManagedEventListParams = { query?: string };
 export type AdminRegistrationQuery = {

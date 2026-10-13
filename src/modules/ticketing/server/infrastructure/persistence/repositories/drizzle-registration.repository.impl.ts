@@ -96,6 +96,13 @@ type EventForRegistration = {
   paymentMode: string;
   pixCode: string | null;
   pixQrCodeUrl: string | null;
+  pixBankName: string | null;
+  pixBankAgency: string | null;
+  pixBankAccount: string | null;
+  pixBankAccountType: string | null;
+  pixBankCnpj: string | null;
+  pixBankAccountHolder: string | null;
+  pixNotificationEmail: string | null;
   maxCapacity: number;
   allowsWaitlist: boolean;
   registrationStartAt: Date;
@@ -454,6 +461,12 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         paymentMode: event.paymentMode,
         pixCode: event.pixCode,
         pixQrCodeUrl: event.pixQrCodeUrl,
+        pixBankName: event.pixBankName,
+        pixBankAgency: event.pixBankAgency,
+        pixBankAccount: event.pixBankAccount,
+        pixBankAccountType: event.pixBankAccountType,
+        pixBankCnpj: event.pixBankCnpj,
+        pixBankAccountHolder: event.pixBankAccountHolder,
       });
     });
   }
@@ -549,6 +562,12 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
       paymentMode: event.paymentMode ?? "pagbank",
       pixCode: event.pixCode ?? null,
       pixQrCodeUrl: event.pixQrCodeUrl ?? null,
+      pixBankName: event.pixBankName ?? null,
+      pixBankAgency: event.pixBankAgency ?? null,
+      pixBankAccount: event.pixBankAccount ?? null,
+      pixBankAccountType: event.pixBankAccountType ?? null,
+      pixBankCnpj: event.pixBankCnpj ?? null,
+      pixBankAccountHolder: event.pixBankAccountHolder ?? null,
       certificateCode: row.certificate?.authenticationCode ?? null,
       certificateIssuedAt: row.certificate?.issuedAt ?? null,
     };
@@ -1833,6 +1852,13 @@ function toEventForRegistration(
     paymentMode: row.paymentMode ?? "pagbank",
     pixCode: row.pixCode ?? null,
     pixQrCodeUrl: row.pixQrCodeUrl ?? null,
+    pixBankName: row.pixBankName ?? null,
+    pixBankAgency: row.pixBankAgency ?? null,
+    pixBankAccount: row.pixBankAccount ?? null,
+    pixBankAccountType: row.pixBankAccountType ?? null,
+    pixBankCnpj: row.pixBankCnpj ?? null,
+    pixBankAccountHolder: row.pixBankAccountHolder ?? null,
+    pixNotificationEmail: row.pixNotificationEmail ?? null,
     maxCapacity: row.maxCapacity,
     allowsWaitlist: row.allowsWaitlist,
     registrationStartAt: row.registrationStartAt,

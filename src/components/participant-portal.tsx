@@ -338,6 +338,31 @@ export function ParticipantPortal({ accessToken }: ParticipantPortalProps) {
                 </p>
               </InlineAlert>
 
+              {portal.pixBankName || portal.pixBankAccountHolder || portal.pixBankCnpj ? (
+                <div className="rounded-app-md border border-app-border bg-app-surface p-4 text-xs space-y-2">
+                  <p className="font-semibold text-app-foreground uppercase tracking-wider text-[11px]">
+                    Dados Bancários para Transferência / PIX
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-app-muted-foreground">
+                    {portal.pixBankName ? (
+                      <p><strong>Banco:</strong> {portal.pixBankName}</p>
+                    ) : null}
+                    {portal.pixBankAgency ? (
+                      <p><strong>Agência:</strong> {portal.pixBankAgency}</p>
+                    ) : null}
+                    {portal.pixBankAccount ? (
+                      <p><strong>Conta:</strong> {portal.pixBankAccount} {portal.pixBankAccountType ? `(${portal.pixBankAccountType})` : ""}</p>
+                    ) : null}
+                    {portal.pixBankCnpj ? (
+                      <p><strong>CNPJ:</strong> {portal.pixBankCnpj}</p>
+                    ) : null}
+                    {portal.pixBankAccountHolder ? (
+                      <p className="sm:col-span-2"><strong>Favorecido:</strong> {portal.pixBankAccountHolder}</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="pt-2">
                 <Button
                   type="button"

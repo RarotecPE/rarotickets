@@ -46,6 +46,13 @@ type EventDraft = {
   paymentMode: "pagbank" | "pix_manual";
   pixCode: string;
   pixQrCodeUrl: string;
+  pixBankName: string;
+  pixBankAgency: string;
+  pixBankAccount: string;
+  pixBankAccountType: string;
+  pixBankCnpj: string;
+  pixBankAccountHolder: string;
+  pixNotificationEmail: string;
   startAt: string;
   endAt: string;
   registrationStartAt: string;
@@ -159,6 +166,13 @@ function createEmptyDraft(): EventDraft {
     paymentMode: "pagbank",
     pixCode: "",
     pixQrCodeUrl: "",
+    pixBankName: "",
+    pixBankAgency: "",
+    pixBankAccount: "",
+    pixBankAccountType: "corrente",
+    pixBankCnpj: "",
+    pixBankAccountHolder: "",
+    pixNotificationEmail: "",
     startAt: "",
     endAt: "",
     registrationStartAt: "",
@@ -263,6 +277,13 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
           paymentMode: data.props.paymentMode ?? "pagbank",
           pixCode: data.props.pixCode ?? "",
           pixQrCodeUrl: data.props.pixQrCodeUrl ?? "",
+          pixBankName: data.props.pixBankName ?? "",
+          pixBankAgency: data.props.pixBankAgency ?? "",
+          pixBankAccount: data.props.pixBankAccount ?? "",
+          pixBankAccountType: data.props.pixBankAccountType ?? "corrente",
+          pixBankCnpj: data.props.pixBankCnpj ?? "",
+          pixBankAccountHolder: data.props.pixBankAccountHolder ?? "",
+          pixNotificationEmail: data.props.pixNotificationEmail ?? "",
           startAt: toDatetimeLocalValue(data.props.startAt),
           endAt: toDatetimeLocalValue(data.props.endAt),
           registrationStartAt: toDatetimeLocalValue(data.props.registrationStartAt),
@@ -992,6 +1013,136 @@ function BasicEventSection({
                         </p>
                       </div>
                     ) : null}
+                  </Field>
+
+                  <div className="sm:col-span-2 pt-2 border-t border-app-border/40">
+                    <p className="text-xs font-semibold text-app-foreground mb-1">
+                      Dados da Conta Bancária (opcional)
+                    </p>
+                    <p className="text-xs text-app-muted-foreground">
+                      Informe os dados bancários para participantes que optarem por conferência, transferência bancária ou PIX por agência/conta.
+                    </p>
+                  </div>
+
+                  <Field
+                    label="Banco"
+                    htmlFor="event-pix-bank-name"
+                    hint="Nome ou código do banco (ex: Banco do Brasil, Itaú, Nubank)."
+                    error={errors.pixBankName}
+                  >
+                    <input
+                      id="event-pix-bank-name"
+                      type="text"
+                      value={draft.pixBankName}
+                      onChange={(event) => change(event, "pixBankName")}
+                      className={inputClass}
+                      placeholder="Ex: Banco do Brasil, Itaú, Nubank"
+                    />
+                  </Field>
+
+                  <Field
+                    label="Agência"
+                    htmlFor="event-pix-bank-agency"
+                    hint="Número da agência sem dígito (se houver)."
+                    error={errors.pixBankAgency}
+                  >
+                    <input
+                      id="event-pix-bank-agency"
+                      type="text"
+                      value={draft.pixBankAgency}
+                      onChange={(event) => change(event, "pixBankAgency")}
+                      className={inputClass}
+                      placeholder="Ex: 0001"
+                    />
+                  </Field>
+
+                  <Field
+                    label="Número da conta"
+                    htmlFor="event-pix-bank-account"
+                    hint="Número da conta com dígito verificador."
+                    error={errors.pixBankAccount}
+                  >
+                    <input
+                      id="event-pix-bank-account"
+                      type="text"
+                      value={draft.pixBankAccount}
+                      onChange={(event) => change(event, "pixBankAccount")}
+                      className={inputClass}
+                      placeholder="Ex: 1234567-8"
+                    />
+                  </Field>
+
+                  <Field
+                    label="Tipo de conta"
+                    htmlFor="event-pix-bank-account-type"
+                    error={errors.pixBankAccountType}
+                  >
+                    <select
+                      id="event-pix-bank-account-type"
+                      value={draft.pixBankAccountType}
+                      onChange={(event) => change(event, "pixBankAccountType")}
+                      className={selectCls}
+                    >
+                      <option value="corrente">Conta Corrente</option>
+                      <option value="poupanca">Conta Poupança</option>
+                      <option value="pagamento">Conta de Pagamento</option>
+                    </select>
+                  </Field>
+
+                  <Field
+                    label="CNPJ"
+                    htmlFor="event-pix-bank-cnpj"
+                    hint="CNPJ da conta para identificação pelo participante."
+                    error={errors.pixBankCnpj}
+                  >
+                    <input
+                      id="event-pix-bank-cnpj"
+                      type="text"
+                      value={draft.pixBankCnpj}
+                      onChange={(event) => change(event, "pixBankCnpj")}
+                      className={inputClass}
+                      placeholder="00.000.000/0001-00"
+                    />
+                  </Field>
+
+                  <Field
+                    label="Nome / Razão Social"
+                    htmlFor="event-pix-bank-account-holder"
+                    hint="Nome do titular ou razão social da conta."
+                    error={errors.pixBankAccountHolder}
+                  >
+                    <input
+                      id="event-pix-bank-account-holder"
+                      type="text"
+                      value={draft.pixBankAccountHolder}
+                      onChange={(event) => change(event, "pixBankAccountHolder")}
+                      className={inputClass}
+                      placeholder="Ex: Razão Social ou Nome do Titular"
+                    />
+                  </Field>
+
+                  <div className="sm:col-span-2 pt-2 border-t border-app-border/40">
+                    <p className="text-xs font-semibold text-app-foreground mb-1">
+                      Aviso de Inscrições para a Equipe
+                    </p>
+                  </div>
+
+                  <Field
+                    label="E-mail para notificação de inscrições PIX"
+                    htmlFor="event-pix-notification-email"
+                    hint="E-mail que receberá um aviso imediato a cada inscrição via PIX para verificar a transferência e confirmar o pagamento."
+                    error={errors.pixNotificationEmail}
+                    className="sm:col-span-2"
+                  >
+                    <input
+                      id="event-pix-notification-email"
+                      type="email"
+                      value={draft.pixNotificationEmail}
+                      onChange={(event) => change(event, "pixNotificationEmail")}
+                      className={inputClass}
+                      placeholder="financeiro@empresa.com.br"
+                      aria-invalid={Boolean(errors.pixNotificationEmail)}
+                    />
                   </Field>
                 </div>
               </div>
@@ -1974,6 +2125,12 @@ function validateEventDraft(
       errors.pixCode = "Informe o código PIX Copia e Cola.";
     if (!draft.pixQrCodeUrl.trim())
       errors.pixQrCodeUrl = "Anexe a imagem do QR Code para o PIX.";
+    if (
+      draft.pixNotificationEmail.trim() &&
+      Email.create(draft.pixNotificationEmail.trim()).isFailure
+    ) {
+      errors.pixNotificationEmail = "Informe um e-mail válido para notificação.";
+    }
   }
   const lots =
     draft.chargeType === "pago"
@@ -2060,6 +2217,34 @@ function validateEventDraft(
     pixQrCodeUrl:
       draft.chargeType === "pago" && draft.paymentMode === "pix_manual"
         ? draft.pixQrCodeUrl.trim() || null
+        : null,
+    pixBankName:
+      draft.chargeType === "pago" && draft.paymentMode === "pix_manual"
+        ? draft.pixBankName.trim() || null
+        : null,
+    pixBankAgency:
+      draft.chargeType === "pago" && draft.paymentMode === "pix_manual"
+        ? draft.pixBankAgency.trim() || null
+        : null,
+    pixBankAccount:
+      draft.chargeType === "pago" && draft.paymentMode === "pix_manual"
+        ? draft.pixBankAccount.trim() || null
+        : null,
+    pixBankAccountType:
+      draft.chargeType === "pago" && draft.paymentMode === "pix_manual"
+        ? draft.pixBankAccountType.trim() || null
+        : null,
+    pixBankCnpj:
+      draft.chargeType === "pago" && draft.paymentMode === "pix_manual"
+        ? draft.pixBankCnpj.trim() || null
+        : null,
+    pixBankAccountHolder:
+      draft.chargeType === "pago" && draft.paymentMode === "pix_manual"
+        ? draft.pixBankAccountHolder.trim() || null
+        : null,
+    pixNotificationEmail:
+      draft.chargeType === "pago" && draft.paymentMode === "pix_manual"
+        ? draft.pixNotificationEmail.trim() || null
         : null,
     startAt,
     endAt,

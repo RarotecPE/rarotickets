@@ -27,6 +27,13 @@ export type EventProps = {
   paymentMode: EventPaymentMode;
   pixCode: string | null;
   pixQrCodeUrl: string | null;
+  pixBankName: string | null;
+  pixBankAgency: string | null;
+  pixBankAccount: string | null;
+  pixBankAccountType: string | null;
+  pixBankCnpj: string | null;
+  pixBankAccountHolder: string | null;
+  pixNotificationEmail: string | null;
   status: EventStatus;
   startAt: Date;
   endAt: Date;
@@ -102,6 +109,13 @@ export class Event extends AggregateRoot<EventProps> {
   get paymentMode(): EventPaymentMode { return this.props.paymentMode ?? "pagbank"; }
   get pixCode(): string | null { return this.props.pixCode ?? null; }
   get pixQrCodeUrl(): string | null { return this.props.pixQrCodeUrl ?? null; }
+  get pixBankName(): string | null { return this.props.pixBankName ?? null; }
+  get pixBankAgency(): string | null { return this.props.pixBankAgency ?? null; }
+  get pixBankAccount(): string | null { return this.props.pixBankAccount ?? null; }
+  get pixBankAccountType(): string | null { return this.props.pixBankAccountType ?? null; }
+  get pixBankCnpj(): string | null { return this.props.pixBankCnpj ?? null; }
+  get pixBankAccountHolder(): string | null { return this.props.pixBankAccountHolder ?? null; }
+  get pixNotificationEmail(): string | null { return this.props.pixNotificationEmail ?? null; }
   get propsSnapshot(): EventProps { return { ...this.props, address: this.props.address ? { ...this.props.address } : null }; }
 
   canAcceptRegistration(params: EventRegistrationWindowParams): boolean {

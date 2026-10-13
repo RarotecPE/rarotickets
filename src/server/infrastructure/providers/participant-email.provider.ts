@@ -8,6 +8,7 @@ import type {
   IParticipantEmailSender,
   SendPaymentConfirmedEmailParams,
   SendWaitlistPromotedEmailParams,
+  SendPixPendingNotificationEmailParams,
 } from "@/modules/ticketing/domain/services/participant-email-sender.interface";
 
 export class ParticipantEmailProvider implements IParticipantEmailSender {
@@ -426,6 +427,87 @@ export class ParticipantEmailProvider implements IParticipantEmailSender {
     } catch (error) {
       console.warn(
         "[ParticipantEmailProvider] Falha ao enviar e-mail de promoção da lista de espera via RaroNexus:",
+        error,
+      );
+    }
+  }
+
+  async sendPixPendingNotificationEmail(
+    params: SendPixPendingNotificationEmailParams,
+  ): Promise<void> {
+    const env = readEnvironment();
+    const endpoint =
+      env.raroNexusEmailEndpointPixPendingNotification ||
+      "notificacao-pix-pendente";
+    const timeZone = env.appTimezone || "America/Sao_Paulo";
+    const formattedCreatedAt = formatDateTime(params.createdAt, timeZone);
+    const formattedDeadline = params.reservationExpiresAt
+      ? formatDateTime(params.reservationExpiresAt, timeZone)
+      : "24 horas";
+    const formattedAmount = formatCurrencyFromCents(params.amountCents);
+
+    const bodyHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #111827; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
+        <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 24px;">
+          <span style="display: inline-block; background-color: #fef3c7; color: #92400e; font-size: 12px; font-weight: bold; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase;">
+            Nova Inscrição · Pagamento PIX Pendente
+          </span>
+          <h2 style="color: #111827; margin: 12px 0 4px 0; font-size: 20px;">Aviso de Inscrição via PIX para Validação</h2>
+          <p style="color: #4b5563; margin: 0; font-size: 14px;">
+            Uma nova inscrição foi realizada no evento <strong>${escapeHtml(params.eventTitle)}</strong> aguardando confirmação do pagamento via PIX direto.
+          </p>
+        </div>
+
+        <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #1f2937; text-transform: uppercase; letter-spacing: 0.5px;">Dados do Participante</h3>
+          <p style="margin: 6px 0; font-size: 14px; color: #374151;"><strong>Nome:</strong> ${escapeHtml(params.participantName)}</p>
+          <p style="margin: 6px 0; font-size: 14px; color: #374151;"><strong>E-mail:</strong> ${escapeHtml(params.participantEmail)}</p>
+          ${params.participantPhone ? `<p style="margin: 6px 0; font-size: 14px; color: #374151;"><strong>Telefone:</strong> ${escapeHtml(params.participantPhone)}</p>` : ""}
+        </div>
+
+        <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #1f2937; text-transform: uppercase; letter-spacing: 0.5px;">Dados da Inscrição</h3>
+          <p style="margin: 6px 0; font-size: 14px; color: #374151;"><strong>Código da inscrição:</strong> <span style="font-family: monospace; font-weight: bold; color: #111827;">${escapeHtml(params.registrationCode)}</span></p>
+          <p style="margin: 6px 0; font-size: 14px; color: #374151;"><strong>Valor a conferir:</strong> <strong style="color: #111827;">${escapeHtml(formattedAmount)}</strong></p>
+          ${params.lotName ? `<p style="margin: 6px 0; font-size: 14px; color: #374151;"><strong>Lote:</strong> ${escapeHtml(params.lotName)}</p>` : ""}
+          <p style="margin: 6px 0; font-size: 14px; color: #374151;"><strong>Data da inscrição:</strong> ${escapeHtml(formattedCreatedAt)}</p>
+          <p style="margin: 6px 0; font-size: 14px; color: #374151;"><strong>Reserva válida até:</strong> ${escapeHtml(formattedDeadline)}</p>
+        </div>
+
+        <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+          <h4 style="margin: 0 0 6px 0; font-size: 14px; color: #1e40af;">Ação necessária da equipe:</h4>
+          <p style="margin: 0; font-size: 13px; color: #1e3a8a; line-height: 1.5;">
+            Por favor, confira o extrato da conta bancária da organização. Assim que a transferência/PIX for identificada, acesse a listagem de inscrições no painel do RaroTickets e utilize o menu de ações da inscrição para <strong>Confirmar pagamento</strong>.
+          </p>
+        </div>
+
+        <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 20px;">
+          Este é um e-mail automático enviado pelo RaroTickets para a equipe organizadora do evento.
+        </p>
+      </div>
+    `.trim();
+
+    try {
+      await this.emailClient.send({
+        to: params.toEmail,
+        subject: `Nova inscrição via PIX: ${params.eventTitle} (${params.registrationCode})`,
+        body: bodyHtml,
+        endpoint,
+        metadata: {
+          eventTitle: params.eventTitle,
+          registrationCode: params.registrationCode,
+          participantName: params.participantName,
+          participantEmail: params.participantEmail,
+          participantPhone: params.participantPhone ?? null,
+          amountCents: params.amountCents,
+          formattedAmount,
+          lotName: params.lotName ?? null,
+          reservationExpiresAt: params.reservationExpiresAt?.toISOString() ?? null,
+        },
+      });
+    } catch (error) {
+      console.warn(
+        "[ParticipantEmailProvider] Falha ao enviar notificação de PIX pendente para equipe via RaroNexus:",
         error,
       );
     }

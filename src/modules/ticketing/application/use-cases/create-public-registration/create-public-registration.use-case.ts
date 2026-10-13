@@ -17,6 +17,7 @@ import type { IFileStorageProvider } from "@/modules/ticketing/domain/services/f
 import { ParticipantFileDomainService, type ValidateParticipantFileParams } from "@/modules/ticketing/domain/registrations/services/participant-file.domain-service";
 import type { FormFieldType } from "@/modules/ticketing/domain/registrations/services/registration-form.domain-service";
 import type { CreatePublicRegistrationOutput, RegistrationAttachment } from "@/modules/ticketing/domain/registrations/repositories/registration-repository.interface";
+import type { IParticipantEmailSender } from "@/modules/ticketing/domain/services/participant-email-sender.interface";
 
 export type UploadedParticipantFile = { fieldId: string; fileName: string; mimeType: string; sizeBytes: number; content: Uint8Array };
 export type PreparedParticipantFile = RegistrationAttachment & { content: Uint8Array };
@@ -50,6 +51,7 @@ export type CreatePublicRegistrationDependencies = {
   fileStorageProvider: IFileStorageProvider;
   paymentGateway: IPaymentGateway;
   publicBaseUrl: string;
+  emailSender?: IParticipantEmailSender;
 };
 
 export class CreatePublicRegistrationUseCase extends UseCase<CreatePublicRegistrationInputDto, CreatePublicRegistrationOutputDto> {
@@ -64,6 +66,7 @@ export class CreatePublicRegistrationUseCase extends UseCase<CreatePublicRegistr
   private readonly fileStorageProvider: IFileStorageProvider;
   private readonly paymentGateway: IPaymentGateway;
   private readonly publicBaseUrl: string;
+  private readonly emailSender?: IParticipantEmailSender;
 
   constructor(dependencies: CreatePublicRegistrationDependencies) {
     super();
@@ -78,6 +81,7 @@ export class CreatePublicRegistrationUseCase extends UseCase<CreatePublicRegistr
     this.fileStorageProvider = dependencies.fileStorageProvider;
     this.paymentGateway = dependencies.paymentGateway;
     this.publicBaseUrl = dependencies.publicBaseUrl.replace(/\/$/, "");
+    this.emailSender = dependencies.emailSender;
   }
 
   async execute(input: CreatePublicRegistrationInputDto): Promise<Result<CreatePublicRegistrationOutputDto>> {
@@ -138,6 +142,31 @@ export class CreatePublicRegistrationUseCase extends UseCase<CreatePublicRegistr
     const participantUrl = `${this.publicBaseUrl}/ingressos/${accessToken.rawToken}`;
     const credentialUrl = withCheckout.status === "confirmada" ? participantUrl : null;
     await this.enqueueRegistrationNotification(withCheckout, participant, participantUrl);
+    if (
+      event.props.paymentMode === "pix_manual" &&
+      event.props.pixNotificationEmail?.trim() &&
+      withCheckout.status === "aguardando_pagamento"
+    ) {
+      try {
+        await this.emailSender?.sendPixPendingNotificationEmail?.({
+          toEmail: event.props.pixNotificationEmail.trim(),
+          eventTitle: withCheckout.eventTitle,
+          registrationCode: withCheckout.registrationCode,
+          participantName: participant.name,
+          participantEmail: participant.email,
+          participantPhone: participant.phone ?? null,
+          amountCents: withCheckout.finalCents,
+          lotName: input.lotId ? event.lots.find((lot) => lot.id === input.lotId)?.name ?? null : null,
+          createdAt: now,
+          reservationExpiresAt: withCheckout.reservationExpiresAt,
+        });
+      } catch (error) {
+        console.warn(
+          "[CreatePublicRegistrationUseCase] Falha ao enviar notificação de PIX pendente para equipe:",
+          error,
+        );
+      }
+    }
     await this.auditRepository.write({ userId: "public", userName: participant.name, action: "registration.created", entity: "registration", recordId: withCheckout.registrationId, beforeData: null, afterData: { eventSlug: withCheckout.eventSlug, status: withCheckout.status, totalCents: withCheckout.finalCents }, ip: input.ip });
     return Result.ok({
       ...withCheckout,

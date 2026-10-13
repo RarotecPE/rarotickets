@@ -24,6 +24,13 @@ export type CreateEventInputDto = {
   paymentMode?: EventPaymentMode;
   pixCode?: string | null;
   pixQrCodeUrl?: string | null;
+  pixBankName?: string | null;
+  pixBankAgency?: string | null;
+  pixBankAccount?: string | null;
+  pixBankAccountType?: string | null;
+  pixBankCnpj?: string | null;
+  pixBankAccountHolder?: string | null;
+  pixNotificationEmail?: string | null;
   startAt: Date;
   endAt: Date;
   registrationStartAt: Date;
@@ -84,6 +91,13 @@ export class CreateEventUseCase extends UseCase<CreateEventInputDto & CreateEven
       paymentMode: input.paymentMode ?? "pagbank",
       pixCode: input.pixCode ?? null,
       pixQrCodeUrl: input.pixQrCodeUrl ?? null,
+      pixBankName: input.pixBankName ?? null,
+      pixBankAgency: input.pixBankAgency ?? null,
+      pixBankAccount: input.pixBankAccount ?? null,
+      pixBankAccountType: input.pixBankAccountType ?? null,
+      pixBankCnpj: input.pixBankCnpj ?? null,
+      pixBankAccountHolder: input.pixBankAccountHolder ?? null,
+      pixNotificationEmail: input.pixNotificationEmail ?? null,
       status: "rascunho" as EventStatus,
       startAt: input.startAt,
       endAt: input.endAt,

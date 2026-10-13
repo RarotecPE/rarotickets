@@ -229,6 +229,7 @@ export function createTicketingContainer(): TicketingContainer {
       fileStorageProvider,
       paymentGateway,
       publicBaseUrl: environment.appBaseUrl,
+      emailSender: participantEmailSender,
     }),
     getPrivateRegistrationFile: new GetPrivateRegistrationFileUseCase({
       registrationRepository,
