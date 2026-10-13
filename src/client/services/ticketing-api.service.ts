@@ -42,6 +42,9 @@ export type PublicRegistrationResult = {
   credentialUrl: string | null;
   eventTitle: string;
   accessToken?: string;
+  paymentMode?: string | null;
+  pixCode?: string | null;
+  pixQrCodeUrl?: string | null;
 };
 export type ManagedEventListParams = { query?: string };
 export type AdminRegistrationQuery = {
@@ -170,6 +173,16 @@ export class TicketingApiService extends ApiService {
     });
     return result.data.bannerUrl;
   }
+  async uploadEventPixQr(params: { file: File }): Promise<string> {
+    const formData = new FormData();
+    formData.set("file", params.file);
+    const result = await this.httpClient.request<{ pixQrCodeUrl: string }>({
+      path: "/api/v1/admin/event-pix-qrcodes",
+      method: "POST",
+      body: formData,
+    });
+    return result.data.pixQrCodeUrl;
+  }
   async getManagedEvent(params: { eventId: string }): Promise<EventReadModel> {
     return (
       await this.httpClient.request<EventReadModel>({
@@ -243,6 +256,19 @@ export class TicketingApiService extends ApiService {
         path: `/api/v1/admin/registrations/${encodeURIComponent(params.registrationId)}/cancel`,
         method: "POST",
         body: { reason: params.reason },
+      })
+    ).data;
+  }
+  async confirmManualPayment(params: {
+    registrationId: string;
+  }): Promise<{ registrationCode: string; status: string }> {
+    return (
+      await this.httpClient.request<{
+        registrationCode: string;
+        status: string;
+      }>({
+        path: `/api/v1/admin/registrations/${encodeURIComponent(params.registrationId)}/confirm-payment`,
+        method: "POST",
       })
     ).data;
   }

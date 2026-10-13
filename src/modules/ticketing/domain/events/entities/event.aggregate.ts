@@ -7,6 +7,7 @@ import { EventTitle } from "../value-objects/event-title.vo";
 export type EventStatus = "rascunho" | "agendado" | "inscricoes_abertas" | "inscricoes_encerradas" | "em_andamento" | "finalizado" | "cancelado";
 export type EventModality = "presencial" | "online";
 export type EventChargeType = "gratuito" | "pago";
+export type EventPaymentMode = "pagbank" | "pix_manual";
 export type EventAddress = {
   street: string;
   number: string;
@@ -23,6 +24,9 @@ export type EventProps = {
   bannerUrl: string | null;
   modality: EventModality;
   chargeType: EventChargeType;
+  paymentMode: EventPaymentMode;
+  pixCode: string | null;
+  pixQrCodeUrl: string | null;
   status: EventStatus;
   startAt: Date;
   endAt: Date;
@@ -95,6 +99,9 @@ export class Event extends AggregateRoot<EventProps> {
   get maxCapacity(): number { return this.props.maxCapacity; }
   get modality(): EventModality { return this.props.modality; }
   get chargeType(): EventChargeType { return this.props.chargeType; }
+  get paymentMode(): EventPaymentMode { return this.props.paymentMode ?? "pagbank"; }
+  get pixCode(): string | null { return this.props.pixCode ?? null; }
+  get pixQrCodeUrl(): string | null { return this.props.pixQrCodeUrl ?? null; }
   get propsSnapshot(): EventProps { return { ...this.props, address: this.props.address ? { ...this.props.address } : null }; }
 
   canAcceptRegistration(params: EventRegistrationWindowParams): boolean {
@@ -126,6 +133,14 @@ export class Event extends AggregateRoot<EventProps> {
     if (props.modality === "presencial" && !Event.hasCompleteAddress(props.address)) return new EventRuleError({ code: "EVENT_ADDRESS_REQUIRED", message: "Eventos presenciais precisam de endereço completo." });
     if (props.modality === "online" && !Event.isSafeUrl(props.onlineUrl)) return new EventRuleError({ code: "EVENT_ONLINE_URL_REQUIRED", message: "Eventos online precisam de um link seguro de transmissão." });
     if (props.chargeType === "gratuito" && props.workloadHours < 0) return new EventRuleError({ code: "EVENT_WORKLOAD_INVALID", message: "A carga horária não pode ser negativa." });
+    if (props.chargeType === "pago" && props.paymentMode === "pix_manual") {
+      if (!props.pixCode?.trim()) {
+        return new EventRuleError({ code: "EVENT_PIX_CODE_REQUIRED", message: "Informe o código PIX Copia e Cola para pagamentos via PIX direto." });
+      }
+      if (!props.pixQrCodeUrl?.trim()) {
+        return new EventRuleError({ code: "EVENT_PIX_QR_CODE_REQUIRED", message: "Anexe a imagem do QR Code para pagamentos via PIX direto." });
+      }
+    }
     return null;
   }
 

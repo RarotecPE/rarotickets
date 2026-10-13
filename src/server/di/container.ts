@@ -8,6 +8,8 @@ import { CancelRegistrationUseCase } from "@/modules/ticketing/application/use-c
 import { CheckInUseCase } from "@/modules/ticketing/application/use-cases/check-in/check-in.use-case";
 import { CreateEventUseCase } from "@/modules/ticketing/application/use-cases/create-event/create-event.use-case";
 import { UploadEventBannerUseCase } from "@/modules/ticketing/application/use-cases/upload-event-banner/upload-event-banner.use-case";
+import { UploadEventPixQrUseCase } from "@/modules/ticketing/application/use-cases/upload-event-pix-qr/upload-event-pix-qr.use-case";
+import { ConfirmManualPaymentUseCase } from "@/modules/ticketing/application/use-cases/confirm-manual-payment/confirm-manual-payment.use-case";
 import { CreatePublicRegistrationUseCase } from "@/modules/ticketing/application/use-cases/create-public-registration/create-public-registration.use-case";
 import { GetPrivateRegistrationFileUseCase } from "@/modules/ticketing/application/use-cases/get-private-registration-file/get-private-registration-file.use-case";
 import { GetPublicFileUseCase } from "@/modules/ticketing/application/use-cases/get-public-file/get-public-file.use-case";
@@ -62,6 +64,7 @@ export type TicketingContainer = {
   getManagedEvent: GetManagedEventUseCase;
   createEvent: CreateEventUseCase;
   uploadEventBanner: UploadEventBannerUseCase;
+  uploadEventPixQr: UploadEventPixQrUseCase;
   updateEvent: UpdateEventUseCase;
   transitionEvent: TransitionEventUseCase;
   createPublicRegistration: CreatePublicRegistrationUseCase;
@@ -71,6 +74,7 @@ export type TicketingContainer = {
   startParticipantCheckout: StartParticipantCheckoutUseCase;
   listRegistrations: ListRegistrationsUseCase;
   cancelRegistration: CancelRegistrationUseCase;
+  confirmManualPayment: ConfirmManualPaymentUseCase;
   processPaymentWebhook: ProcessPaymentWebhookUseCase;
   checkIn: CheckInUseCase;
   getDashboard: GetDashboardUseCase;
@@ -195,6 +199,11 @@ export function createTicketingContainer(): TicketingContainer {
       idGenerator,
       bannerValidator: new BannerImageDomainService(),
     }),
+    uploadEventPixQr: new UploadEventPixQrUseCase({
+      fileStorageProvider,
+      idGenerator,
+      imageValidator: new BannerImageDomainService(),
+    }),
     updateEvent: new UpdateEventUseCase({
       eventRepository,
       auditRepository,
@@ -243,6 +252,14 @@ export function createTicketingContainer(): TicketingContainer {
       registrationRepository,
       auditRepository,
       promoteWaitlist,
+    }),
+    confirmManualPayment: new ConfirmManualPaymentUseCase({
+      registrationRepository,
+      auditRepository,
+      credentialProvider,
+      outboxRepository,
+      emailSender: participantEmailSender,
+      publicBaseUrl: environment.appBaseUrl,
     }),
     processPaymentWebhook,
     checkIn: new CheckInUseCase({

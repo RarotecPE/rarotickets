@@ -3,7 +3,7 @@ import { Identifier } from "@/@core/domain/identifier";
 import type { IIdGenerator } from "@/@core/domain/id-generator.interface";
 import { Result } from "@/@core/domain/result";
 import { Event } from "@/modules/ticketing/domain/events/entities/event.aggregate";
-import type { EventAddress, EventChargeType, EventModality, EventStatus } from "@/modules/ticketing/domain/events/entities/event.aggregate";
+import type { EventAddress, EventChargeType, EventModality, EventPaymentMode, EventStatus } from "@/modules/ticketing/domain/events/entities/event.aggregate";
 import type { EventReadModel, EventRepository, NewEventActivity, NewEventField, NewEventLot } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
 import type { IAuditRepository } from "@/modules/ticketing/domain/repositories/audit-repository.interface";
 import { EventSlug } from "@/modules/ticketing/domain/events/value-objects/event-slug.vo";
@@ -21,6 +21,9 @@ export type CreateEventInputDto = {
   bannerUrl: string | null;
   modality: EventModality;
   chargeType: EventChargeType;
+  paymentMode?: EventPaymentMode;
+  pixCode?: string | null;
+  pixQrCodeUrl?: string | null;
   startAt: Date;
   endAt: Date;
   registrationStartAt: Date;
@@ -78,6 +81,9 @@ export class CreateEventUseCase extends UseCase<CreateEventInputDto & CreateEven
       bannerUrl: input.bannerUrl,
       modality: input.modality,
       chargeType: input.chargeType,
+      paymentMode: input.paymentMode ?? "pagbank",
+      pixCode: input.pixCode ?? null,
+      pixQrCodeUrl: input.pixQrCodeUrl ?? null,
       status: "rascunho" as EventStatus,
       startAt: input.startAt,
       endAt: input.endAt,

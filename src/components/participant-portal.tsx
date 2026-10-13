@@ -13,6 +13,7 @@ import {
   MapPin,
   MonitorPlay,
   Printer,
+  QrCode,
   RefreshCw,
   Ticket,
 } from "lucide-react";
@@ -39,6 +40,14 @@ export function ParticipantPortal({ accessToken }: ParticipantPortalProps) {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedPix, setCopiedPix] = useState(false);
+
+  function copyPixCode(): void {
+    if (!portal?.pixCode) return;
+    void navigator.clipboard.writeText(portal.pixCode);
+    setCopiedPix(true);
+    window.setTimeout(() => setCopiedPix(false), 2000);
+  }
 
   useEffect(() => {
     let active = true;
@@ -237,51 +246,157 @@ export function ParticipantPortal({ accessToken }: ParticipantPortalProps) {
       </Panel>
 
       {waitingPayment ? (
-        <Panel>
-          <PanelHeader
-            title="Pagamento"
-            description={
-              portal.waitlistExpiresAt
-                ? "Uma vaga foi liberada para você. Conclua o pagamento em até 24 horas."
-                : "A reserva temporária da vaga tem duração de 15 minutos."
-            }
-          />
-          <div className="space-y-3 p-4 sm:p-5">
-            {portal.reservationExpiresAt ? (
-              <p className="inline-flex items-center gap-2 text-sm text-app-muted-foreground">
-                <Clock3
-                  className="h-4 w-4 text-app-warning"
-                  aria-hidden="true"
-                />
-                {portal.waitlistExpiresAt
-                  ? "Prazo para confirmar a vaga: "
-                  : "Prazo da reserva: "}
-                {formatDate({
-                  value: portal.waitlistExpiresAt ?? portal.reservationExpiresAt,
-                  withTime: true,
-                })}
+        portal.paymentMode === "pix_manual" ? (
+          <Panel>
+            <PanelHeader
+              title="Pagamento via PIX"
+              description={
+                portal.waitlistExpiresAt
+                  ? "Uma vaga foi liberada para você. Realize o PIX em até 24 horas."
+                  : "A reserva temporária da vaga tem duração de 15 minutos."
+              }
+              right={
+                <Badge tone="primary" className="gap-1.5 py-1 text-xs">
+                  <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+                  PIX Direto
+                </Badge>
+              }
+            />
+            <div className="space-y-4 p-4 sm:p-5">
+              {portal.reservationExpiresAt ? (
+                <p className="inline-flex items-center gap-2 text-sm text-app-muted-foreground">
+                  <Clock3
+                    className="h-4 w-4 text-app-warning"
+                    aria-hidden="true"
+                  />
+                  {portal.waitlistExpiresAt
+                    ? "Prazo para confirmar a vaga: "
+                    : "Prazo da reserva: "}
+                  {formatDate({
+                    value: portal.waitlistExpiresAt ?? portal.reservationExpiresAt,
+                    withTime: true,
+                  })}
+                </p>
+              ) : null}
+
+              {portal.pixQrCodeUrl ? (
+                <div className="flex flex-col items-center justify-center p-2">
+                  <div className="rounded-app-lg border border-app-border bg-white p-3 shadow-sm">
+                    <img
+                      src={portal.pixQrCodeUrl}
+                      alt="QR Code para pagamento via PIX"
+                      className="h-56 w-56 object-contain sm:h-64 sm:w-64"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-app-muted-foreground">
+                    Aponte a câmera do aplicativo do seu banco para o QR Code
+                  </p>
+                </div>
+              ) : null}
+
+              {portal.pixCode ? (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-app-foreground">
+                    Código PIX Copia e Cola:
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={portal.pixCode}
+                      className="w-full rounded-app-md border border-app-border bg-app-surface px-3 py-2 font-mono text-xs text-app-foreground select-all focus:outline-none"
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                    <Button
+                      type="button"
+                      variant={copiedPix ? "primary" : "secondary"}
+                      onClick={copyPixCode}
+                      className="shrink-0"
+                    >
+                      {copiedPix ? (
+                        <>
+                          <CheckCircle2
+                            className="h-4 w-4 text-emerald-500"
+                            aria-hidden="true"
+                          />
+                          Copiado!
+                        </>
+                      ) : (
+                        <>
+                          <Clipboard className="h-4 w-4" aria-hidden="true" />
+                          Copiar
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              <InlineAlert tone="info">
+                <p className="text-xs leading-relaxed">
+                  Após realizar o pagamento via PIX, a organização do evento fará a conferência manual. Assim que aprovado, sua credencial será liberada automaticamente nesta página.
+                </p>
+              </InlineAlert>
+
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setReloadVersion((v) => v + 1)}
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  Atualizar status
+                </Button>
+              </div>
+            </div>
+          </Panel>
+        ) : (
+          <Panel>
+            <PanelHeader
+              title="Pagamento"
+              description={
+                portal.waitlistExpiresAt
+                  ? "Uma vaga foi liberada para você. Conclua o pagamento em até 24 horas."
+                  : "A reserva temporária da vaga tem duração de 15 minutos."
+              }
+            />
+            <div className="space-y-3 p-4 sm:p-5">
+              {portal.reservationExpiresAt ? (
+                <p className="inline-flex items-center gap-2 text-sm text-app-muted-foreground">
+                  <Clock3
+                    className="h-4 w-4 text-app-warning"
+                    aria-hidden="true"
+                  />
+                  {portal.waitlistExpiresAt
+                    ? "Prazo para confirmar a vaga: "
+                    : "Prazo da reserva: "}
+                  {formatDate({
+                    value: portal.waitlistExpiresAt ?? portal.reservationExpiresAt,
+                    withTime: true,
+                  })}
+                </p>
+              ) : null}
+              <p className="text-xs leading-relaxed text-app-muted-foreground">
+                Finalize o pagamento pelo checkout seguro para confirmar sua
+                participação. O RaroTickets não coleta dados de cartão.
               </p>
-            ) : null}
-            <p className="text-xs leading-relaxed text-app-muted-foreground">
-              Finalize o pagamento pelo checkout seguro para confirmar sua
-              participação. O RaroTickets não coleta dados de cartão.
-            </p>
-            <Button
-              type="button"
-              disabled={checkoutLoading}
-              onClick={() => void startCheckout()}
-            >
-              {checkoutLoading ? (
-                "Abrindo checkout…"
-              ) : (
-                <>
-                  Continuar para pagamento
-                  <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-                </>
-              )}
-            </Button>
-          </div>
-        </Panel>
+              <Button
+                type="button"
+                disabled={checkoutLoading}
+                onClick={() => void startCheckout()}
+              >
+                {checkoutLoading ? (
+                  "Abrindo checkout…"
+                ) : (
+                  <>
+                    Continuar para pagamento
+                    <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </Panel>
+        )
       ) : null}
 
       {confirmed ? (

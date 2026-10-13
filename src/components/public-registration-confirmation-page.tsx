@@ -13,8 +13,10 @@ import Link from "next/link";
 import {
   ArrowLeft,
   CalendarDays,
+  Check,
   CheckCircle2,
   Clock3,
+  Copy,
   CreditCard,
   ExternalLink,
   FileUp,
@@ -22,6 +24,7 @@ import {
   Lock,
   MapPin,
   MonitorPlay,
+  QrCode,
   RefreshCw,
   ShieldCheck,
   TicketCheck,
@@ -113,6 +116,7 @@ export function PublicRegistrationConfirmationPage({
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState(15 * 60);
   const [isCheckingPayment, setIsCheckingPayment] = useState(false);
+  const [copiedPix, setCopiedPix] = useState(false);
 
   const pollingTimerRef = useRef<number | null>(null);
   const popupWindowRef = useRef<Window | null>(null);
@@ -524,7 +528,12 @@ export function PublicRegistrationConfirmationPage({
       } else {
         setStep("waiting_payment");
         setSecondsRemaining(15 * 60);
-        if (result.checkoutUrl) {
+        const isPixManual =
+          result.paymentMode === "pix_manual" ||
+          event?.props.paymentMode === "pix_manual";
+        if (isPixManual) {
+          // Inscrição com PIX Direto: o participante visualiza o QR Code e chave diretamente na tela
+        } else if (result.checkoutUrl) {
           openPagSeguroPopup(result.checkoutUrl);
         } else {
           setPaymentNotice(
@@ -624,11 +633,156 @@ export function PublicRegistrationConfirmationPage({
   const requiresLot = event.props.chargeType === "pago" && !isWaitlist;
   const selectedLot = event.lots.find((lot) => lot.id === lotId);
 
-  // STEP: WAITING PAYMENT (PagSeguro Popup open & polling)
+  // STEP: WAITING PAYMENT (PagSeguro Popup open & polling OR PIX manual QR code)
   if (step === "waiting_payment" && registrationResult) {
     const minutes = Math.floor(secondsRemaining / 60);
     const seconds = secondsRemaining % 60;
     const timeDisplay = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    const isPixManual =
+      registrationResult.paymentMode === "pix_manual" ||
+      event.props.paymentMode === "pix_manual";
+    const effectivePixCode =
+      registrationResult.pixCode ?? event.props.pixCode;
+    const effectivePixQrCodeUrl =
+      registrationResult.pixQrCodeUrl ?? event.props.pixQrCodeUrl;
+
+    if (isPixManual) {
+      return (
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+          <Panel className="overflow-hidden border-app-primary/30 shadow-lg">
+            <PanelHeader
+              title="Aguardando confirmação do pagamento via PIX"
+              description="Efetue a transferência usando o QR Code ou código copia e cola abaixo."
+              right={
+                <Badge tone="primary" className="gap-1.5 py-1 text-xs">
+                  <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+                  PIX Direto
+                </Badge>
+              }
+            />
+            <div className="space-y-6 p-5 sm:p-7">
+              <div className="flex flex-col items-center justify-center gap-4 rounded-app-lg border border-app-primary/20 bg-app-surface-elevated/40 p-6 text-center sm:p-8">
+                {effectivePixQrCodeUrl ? (
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="rounded-app-lg border border-app-border bg-white p-3 shadow-sm">
+                      <img
+                        src={effectivePixQrCodeUrl}
+                        alt="QR Code para pagamento via PIX"
+                        className="h-56 w-56 object-contain sm:h-64 sm:w-64"
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-app-muted-foreground">
+                      Aponte a câmera do aplicativo do seu banco para o QR Code
+                    </p>
+                  </div>
+                ) : (
+                  <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-app-primary/10 text-app-primary">
+                    <QrCode className="h-8 w-8" aria-hidden="true" />
+                  </div>
+                )}
+
+                {effectivePixCode ? (
+                  <div className="w-full max-w-md space-y-2 text-left">
+                    <label className="text-xs font-semibold text-app-foreground">
+                      Código PIX Copia e Cola:
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={effectivePixCode}
+                        className={`${CUSTOM_INPUT_CLASS} font-mono text-xs select-all`}
+                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                      />
+                      <Button
+                        type="button"
+                        variant={copiedPix ? "primary" : "secondary"}
+                        onClick={() => {
+                          void navigator.clipboard.writeText(effectivePixCode);
+                          setCopiedPix(true);
+                          setTimeout(() => setCopiedPix(false), 2500);
+                        }}
+                        className="shrink-0"
+                      >
+                        {copiedPix ? (
+                          <>
+                            <Check className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+                            Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-4 w-4" aria-hidden="true" />
+                            Copiar código
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex items-center gap-2 rounded-app-pill border border-app-border bg-app-surface px-4 py-1.5 text-xs font-semibold text-app-muted-foreground">
+                  <Clock3 className="h-3.5 w-3.5 text-app-warning" aria-hidden="true" />
+                  <span>
+                    Tempo restante de reserva da vaga:{" "}
+                    <strong className="font-mono text-app-foreground">
+                      {timeDisplay}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+
+              <InlineAlert tone="info">
+                <p className="text-xs leading-relaxed">
+                  Após realizar o pagamento via PIX, a organização do evento fará a validação manual. Assim que aprovado, sua inscrição será ativada e a credencial será disponibilizada automaticamente nesta página e enviada por e-mail.
+                </p>
+              </InlineAlert>
+
+              <div className="grid grid-cols-1 gap-3 rounded-app-md border border-app-border bg-app-surface-elevated/60 p-4 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs text-app-muted-foreground">Inscrição</p>
+                  <p className="mt-0.5 font-mono text-sm font-bold text-app-foreground">
+                    {registrationResult.registrationCode}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-app-muted-foreground">Evento</p>
+                  <p className="mt-0.5 truncate text-sm font-semibold text-app-foreground">
+                    {event.props.title}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-app-muted-foreground">Total a pagar</p>
+                  <p className="mt-0.5 text-sm font-bold text-app-primary">
+                    {formatCurrency({ cents: registrationResult.finalCents })}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2.5 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={isCheckingPayment}
+                  onClick={() => void checkPaymentStatus()}
+                >
+                  {isCheckingPayment ? (
+                    <>
+                      <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      Consultando status…
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                      Verificar status agora
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </Panel>
+        </div>
+      );
+    }
 
     return (
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">

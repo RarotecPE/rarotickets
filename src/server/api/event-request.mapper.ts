@@ -1,5 +1,5 @@
 import { Result } from "@/@core/domain/result";
-import type { EventAddress, EventChargeType, EventModality } from "@/modules/ticketing/domain/events/entities/event.aggregate";
+import type { EventAddress, EventChargeType, EventModality, EventPaymentMode } from "@/modules/ticketing/domain/events/entities/event.aggregate";
 import type { CreateEventInputDto, EventActivityDraft, EventFieldDraft, EventLotDraft } from "@/modules/ticketing/application/use-cases/create-event/create-event.use-case";
 import type { FormFieldType } from "@/modules/ticketing/domain/registrations/services/registration-form.domain-service";
 import { isJsonRecord, readBoolean, readDate, readInteger, readOptionalText, readStringArray, readText } from "@/server/api/request-data.util";
@@ -15,6 +15,7 @@ export function mapCreateEventRequest(value: unknown): Result<CreateEventInputDt
   if (!isJsonRecord(value)) return Result.fail(new InvalidEventRequestError("O corpo da requisição precisa ser um objeto JSON."));
   const modality = parseModality(value.modality);
   const chargeType = parseChargeType(value.chargeType);
+  const paymentMode = parsePaymentMode(value.paymentMode);
   const startAt = readDate({ value: value.startAt });
   const endAt = readDate({ value: value.endAt });
   const registrationStartAt = readDate({ value: value.registrationStartAt });
@@ -35,6 +36,9 @@ export function mapCreateEventRequest(value: unknown): Result<CreateEventInputDt
     bannerUrl: readOptionalText({ value: value.bannerUrl }),
     modality,
     chargeType,
+    paymentMode,
+    pixCode: readOptionalText({ value: value.pixCode }),
+    pixQrCodeUrl: readOptionalText({ value: value.pixQrCodeUrl }),
     startAt,
     endAt,
     registrationStartAt,
@@ -68,6 +72,10 @@ function parseModality(value: unknown): EventModality | null {
 
 function parseChargeType(value: unknown): EventChargeType | null {
   return value === "gratuito" || value === "pago" ? value : null;
+}
+
+function parsePaymentMode(value: unknown): EventPaymentMode {
+  return value === "pix_manual" ? "pix_manual" : "pagbank";
 }
 
 function mapAddress(value: unknown): EventAddress | null {

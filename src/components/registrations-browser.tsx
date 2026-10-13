@@ -99,8 +99,17 @@ export function RegistrationsBrowser() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [confirmPaymentTarget, setConfirmPaymentTarget] =
+    useState<RegistrationListItem | null>(null);
+  const [confirmPaymentError, setConfirmPaymentError] = useState<string | null>(
+    null,
+  );
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
   const canCancel = Boolean(
     auth.session?.permissions.includes("registrations:cancel"),
+  );
+  const canManage = Boolean(
+    auth.session?.permissions.includes("registrations:manage"),
   );
   const pageCount = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
 
@@ -259,6 +268,32 @@ export function RegistrationsBrowser() {
       );
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function confirmManualPayment(): Promise<void> {
+    if (!confirmPaymentTarget) return;
+    setConfirmingPayment(true);
+    setConfirmPaymentError(null);
+    try {
+      await ticketingApi.confirmManualPayment({
+        registrationId: confirmPaymentTarget.id,
+      });
+      setNotice(
+        `Pagamento da inscrição ${confirmPaymentTarget.code} confirmado com sucesso. A inscrição agora está confirmada e a credencial foi enviada por e-mail.`,
+      );
+      setConfirmPaymentTarget(null);
+      setDetailTarget(null);
+      setLoading(true);
+      setReloadVersion((current) => current + 1);
+    } catch (caught) {
+      setConfirmPaymentError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível confirmar o pagamento da inscrição.",
+      );
+    } finally {
+      setConfirmingPayment(false);
     }
   }
 
@@ -496,8 +531,10 @@ export function RegistrationsBrowser() {
         <RegistrationTable
           items={result.items}
           canCancel={canCancel}
+          canManage={canManage}
           onSelectDetail={setDetailTarget}
           onCancel={setCancelTarget}
+          onConfirmPayment={setConfirmPaymentTarget}
         />
       ) : (
         <Panel>
@@ -551,12 +588,70 @@ export function RegistrationsBrowser() {
       <RegistrationDetailModal
         item={detailTarget}
         canCancel={canCancel}
+        canManage={canManage}
         onClose={() => setDetailTarget(null)}
         onRequestCancel={(item) => {
           setDetailTarget(null);
           setCancelTarget(item);
         }}
+        onRequestConfirmPayment={(item) => {
+          setConfirmPaymentTarget(item);
+        }}
       />
+
+      <Dialog
+        open={Boolean(confirmPaymentTarget)}
+        onClose={() => {
+          if (!confirmingPayment) {
+            setConfirmPaymentTarget(null);
+            setConfirmPaymentError(null);
+          }
+        }}
+        title="Confirmar pagamento da inscrição"
+        description={
+          confirmPaymentTarget
+            ? `Confirme o recebimento do pagamento da inscrição ${confirmPaymentTarget.code} (${confirmPaymentTarget.participantName}) no valor de ${formatCurrency({ cents: confirmPaymentTarget.finalCents })}.`
+            : undefined
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <InlineAlert tone="info">
+            Ao confirmar, o status da inscrição passará para <strong>Confirmada</strong>, a vaga será garantida e a credencial com QR Code de acesso será emitida e enviada por e-mail para o participante.
+          </InlineAlert>
+          {confirmPaymentError ? (
+            <InlineAlert tone="danger">{confirmPaymentError}</InlineAlert>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={confirmingPayment}
+              onClick={() => {
+                setConfirmPaymentTarget(null);
+                setConfirmPaymentError(null);
+              }}
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={confirmingPayment}
+              onClick={() => void confirmManualPayment()}
+            >
+              {confirmingPayment ? (
+                "Confirmando…"
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                  Confirmar recebimento
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       <Dialog
         open={Boolean(cancelTarget)}
@@ -616,13 +711,17 @@ export function RegistrationsBrowser() {
 function RegistrationTable({
   items,
   canCancel,
+  canManage,
   onSelectDetail,
   onCancel,
+  onConfirmPayment,
 }: {
   items: RegistrationListItem[];
   canCancel: boolean;
+  canManage: boolean;
   onSelectDetail: (item: RegistrationListItem) => void;
   onCancel: (item: RegistrationListItem) => void;
+  onConfirmPayment: (item: RegistrationListItem) => void;
 }) {
   return (
     <Panel>
@@ -661,8 +760,10 @@ function RegistrationTable({
                 key={item.id}
                 item={item}
                 canCancel={canCancel}
+                canManage={canManage}
                 onSelectDetail={onSelectDetail}
                 onCancel={onCancel}
+                onConfirmPayment={onConfirmPayment}
               />
             ))}
           </tbody>
@@ -675,13 +776,17 @@ function RegistrationTable({
 function RegistrationRow({
   item,
   canCancel,
+  canManage,
   onSelectDetail,
   onCancel,
+  onConfirmPayment,
 }: {
   item: RegistrationListItem;
   canCancel: boolean;
+  canManage: boolean;
   onSelectDetail: (item: RegistrationListItem) => void;
   onCancel: (item: RegistrationListItem) => void;
+  onConfirmPayment: (item: RegistrationListItem) => void;
 }) {
   return (
     <tr className="border-b border-app-border last:border-0 hover:bg-app-surface-elevated/40">
@@ -731,6 +836,21 @@ function RegistrationRow({
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1.5">
+          {canManage &&
+          (item.status === "aguardando_pagamento" ||
+            item.status === "pendente") ? (
+            <Button
+              type="button"
+              compact
+              variant="primary"
+              aria-label={`Confirmar pagamento da inscrição ${item.code}`}
+              title="Confirmar pagamento manualmente"
+              onClick={() => onConfirmPayment(item)}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+              Confirmar
+            </Button>
+          ) : null}
           <Button
             type="button"
             compact
@@ -762,13 +882,17 @@ function RegistrationRow({
 function RegistrationDetailModal({
   item,
   canCancel,
+  canManage,
   onClose,
   onRequestCancel,
+  onRequestConfirmPayment,
 }: {
   item: RegistrationListItem | null;
   canCancel: boolean;
+  canManage: boolean;
   onClose: () => void;
   onRequestCancel: (item: RegistrationListItem) => void;
+  onRequestConfirmPayment: (item: RegistrationListItem) => void;
 }) {
   if (!item) return null;
 
@@ -943,6 +1067,17 @@ function RegistrationDetailModal({
             ) : null}
           </dl>
 
+          {item.eventPaymentMode === "pix_manual" ? (
+            <div className="mt-3 rounded-app-md border border-app-primary/30 bg-app-primary/5 p-3 text-xs">
+              <span className="font-semibold text-app-primary">
+                Modo de cobrança: PIX Direto
+              </span>
+              <p className="mt-1 text-app-muted-foreground">
+                O participante realiza a transferência diretamente na conta da organização. Verifique o comprovante ou extrato bancário antes de confirmar o recebimento.
+              </p>
+            </div>
+          ) : null}
+
           {item.payment ? (
             <div className="mt-3 rounded-app-md border border-app-border bg-app-surface-elevated/50 p-3">
               <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-app-muted-foreground">
@@ -1107,7 +1242,19 @@ function RegistrationDetailModal({
 
         {/* Rodapé de ações */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-app-border pt-3">
-          <div>
+          <div className="flex flex-wrap items-center gap-2">
+            {canManage &&
+            (item.status === "aguardando_pagamento" ||
+              item.status === "pendente") ? (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => onRequestConfirmPayment(item)}
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                Confirmar pagamento
+              </Button>
+            ) : null}
             {canCancel && item.status !== "cancelada" ? (
               <Button
                 type="button"

@@ -34,7 +34,9 @@ export class GetPublicFileController extends Controller<GetPublicFileRequest, Ne
 
 function isAllowedPublicFileKey(key: string): boolean {
   const isAllowedPrefix =
-    key.startsWith("public/banners/") || key.startsWith("public/credentials/");
+    key.startsWith("public/banners/") ||
+    key.startsWith("public/credentials/") ||
+    key.startsWith("public/pix-qrcodes/");
   return (
     isAllowedPrefix &&
     !key.includes("..") &&

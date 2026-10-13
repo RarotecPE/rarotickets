@@ -25,6 +25,8 @@ import type {
   AttachCheckoutParams,
   CancelRegistrationParams,
   CancelRegistrationResult,
+  ConfirmManualPaymentParams,
+  ConfirmManualPaymentResult,
   CreatePublicRegistrationOutput,
   CreatePublicRegistrationParams,
   ExpireReservationsParams,
@@ -91,6 +93,9 @@ type EventForRegistration = {
   modality: string;
   onlineUrl: string | null;
   chargeType: string;
+  paymentMode: string;
+  pixCode: string | null;
+  pixQrCodeUrl: string | null;
   maxCapacity: number;
   allowsWaitlist: boolean;
   registrationStartAt: Date;
@@ -403,12 +408,14 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
       }
       let paymentId: string | null = null;
       if (draft.status === "aguardando_pagamento") {
+        const isManualPix = event.paymentMode === "pix_manual";
         const [payment] = await transaction
           .insert(payments)
           .values({
             registrationId: params.registrationId,
             referenceId: params.registrationId,
-            provider: "pagbank",
+            provider: isManualPix ? "pix_manual" : "pagbank",
+            method: isManualPix ? "pix" : null,
             status: "aguardando",
             amountCents: draft.finalCents,
             createdAt: params.at,
@@ -437,7 +444,12 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         paymentExternalId: null,
         checkoutUrl: null,
         accessTokenHash: params.accessTokenHash,
-        shouldCreateCheckout: draft.status === "aguardando_pagamento",
+        shouldCreateCheckout:
+          draft.status === "aguardando_pagamento" &&
+          event.paymentMode !== "pix_manual",
+        paymentMode: event.paymentMode,
+        pixCode: event.pixCode,
+        pixQrCodeUrl: event.pixQrCodeUrl,
       });
     });
   }
@@ -530,6 +542,9 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         : null,
       paymentProvider: row.payment?.provider ?? null,
       paymentExternalId: row.payment?.externalId ?? null,
+      paymentMode: event.paymentMode ?? "pagbank",
+      pixCode: event.pixCode ?? null,
+      pixQrCodeUrl: event.pixQrCodeUrl ?? null,
       certificateCode: row.certificate?.authenticationCode ?? null,
       certificateIssuedAt: row.certificate?.issuedAt ?? null,
     };
@@ -845,6 +860,7 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         eventTitle: row.event.title,
         eventModality: row.event.modality,
         eventChargeType: row.event.chargeType,
+        eventPaymentMode: row.event.paymentMode ?? "pagbank",
         eventStartAt: row.event.startAt,
         participantId: row.participant.id,
         participantName: row.participant.name,
@@ -948,6 +964,184 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         status: "cancelada",
         eventId: row.event.id,
         seatReleased,
+      };
+    });
+  }
+
+  async confirmManualPayment(
+    params: ConfirmManualPaymentParams,
+  ): Promise<ConfirmManualPaymentResult | null> {
+    return this.database.transaction(async (transaction) => {
+      const accessFilters = [
+        eq(registrations.id, params.registrationId),
+        isNull(registrations.deletedAt),
+      ];
+      if (!params.canManageAll) {
+        accessFilters.push(eq(events.createdByGlobalUserId, params.actorId));
+      }
+
+      const [row] = await transaction
+        .select({
+          registration: registrations,
+          participant: participants,
+          event: events,
+        })
+        .from(registrations)
+        .innerJoin(participants, eq(registrations.participantId, participants.id))
+        .innerJoin(events, eq(registrations.eventId, events.id))
+        .where(and(...accessFilters))
+        .for("update")
+        .limit(1);
+
+      if (!row) return null;
+      const { registration, participant, event } = row;
+
+      const lot = registration.lotId
+        ? (
+            await transaction
+              .select()
+              .from(ticketLots)
+              .where(eq(ticketLots.id, registration.lotId))
+              .limit(1)
+          )[0] ?? null
+        : null;
+
+      const [payment] = await transaction
+        .select()
+        .from(payments)
+        .where(eq(payments.registrationId, registration.id))
+        .limit(1);
+
+      const location =
+        [
+          event.addressStreet,
+          event.addressNumber,
+          event.addressNeighborhood,
+          event.addressMunicipality,
+          event.addressState,
+        ]
+          .filter(Boolean)
+          .join(", ") || null;
+
+      // Idempotência: se já confirmada
+      if (registration.status === "confirmada") {
+        return {
+          registrationId: registration.id,
+          registrationCode: registration.code,
+          status: "confirmada",
+          participantName: participant.name,
+          participantEmail: participant.email,
+          eventId: event.id,
+          eventTitle: event.title,
+          eventStartAt: event.startAt,
+          eventEndAt: event.endAt,
+          modality: event.modality,
+          location,
+          onlineUrl: event.onlineUrl ?? null,
+          lotName: lot?.name ?? null,
+          originalCents: registration.originalCents,
+          discountCents: registration.discountCents,
+          finalCents: registration.finalCents,
+          paidAt: payment?.paidAt ?? registration.confirmedAt ?? params.at,
+          paymentProvider: payment?.provider ?? "pix_manual",
+          paymentExternalId: payment?.externalId ?? null,
+        };
+      }
+
+      if (
+        registration.status !== "aguardando_pagamento" &&
+        registration.status !== "pendente"
+      ) {
+        return null;
+      }
+
+      const hasActiveReservation =
+        registration.reservationExpiresAt !== null &&
+        registration.reservationExpiresAt > params.at;
+
+      const available =
+        hasActiveReservation ||
+        (await this.hasAvailableCapacity(
+          transaction,
+          event.id,
+          event.maxCapacity,
+          params.at,
+        ));
+
+      if (
+        !available ||
+        event.status === "cancelado" ||
+        event.status === "finalizado"
+      ) {
+        return null;
+      }
+
+      if (payment) {
+        await transaction
+          .update(payments)
+          .set({
+            status: "pago",
+            paidAt: params.at,
+            provider: payment.provider || "pix_manual",
+            method: payment.method || "pix",
+            updatedAt: params.at,
+          })
+          .where(eq(payments.id, payment.id));
+      } else {
+        await transaction.insert(payments).values({
+          registrationId: registration.id,
+          referenceId: registration.id,
+          provider: "pix_manual",
+          status: "pago",
+          method: "pix",
+          amountCents: registration.finalCents,
+          paidAt: params.at,
+          createdAt: params.at,
+          updatedAt: params.at,
+        });
+      }
+
+      await transaction
+        .update(registrations)
+        .set({
+          status: "confirmada",
+          confirmedAt: params.at,
+          reservationExpiresAt: null,
+          waitlistExpiresAt: null,
+          updatedAt: params.at,
+        })
+        .where(eq(registrations.id, registration.id));
+
+      if (registration.couponId) {
+        await transaction
+          .update(coupons)
+          .set({
+            usedCount: sql`${coupons.usedCount} + 1`,
+            updatedAt: params.at,
+          })
+          .where(eq(coupons.id, registration.couponId));
+      }
+
+      return {
+        registrationId: registration.id,
+        registrationCode: registration.code,
+        status: "confirmada",
+        participantName: participant.name,
+        participantEmail: participant.email,
+        eventId: event.id,
+        eventTitle: event.title,
+        eventStartAt: event.startAt,
+        eventEndAt: event.endAt,
+        modality: event.modality,
+        location,
+        onlineUrl: event.onlineUrl ?? null,
+        lotName: lot?.name ?? null,
+        originalCents: registration.originalCents,
+        discountCents: registration.discountCents,
+        finalCents: registration.finalCents,
+        paidAt: params.at,
+        paymentProvider: payment?.provider ?? "pix_manual",
+        paymentExternalId: payment?.externalId ?? null,
       };
     });
   }
@@ -1632,6 +1826,9 @@ function toEventForRegistration(
     modality: row.modality,
     onlineUrl: row.onlineUrl,
     chargeType: row.chargeType,
+    paymentMode: row.paymentMode ?? "pagbank",
+    pixCode: row.pixCode ?? null,
+    pixQrCodeUrl: row.pixQrCodeUrl ?? null,
     maxCapacity: row.maxCapacity,
     allowsWaitlist: row.allowsWaitlist,
     registrationStartAt: row.registrationStartAt,

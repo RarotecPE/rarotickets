@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, count, eq, gte, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { Identifier } from "@/@core/domain/identifier";
 import { Event } from "@/modules/ticketing/domain/events/entities/event.aggregate";
+import type { EventPaymentMode } from "@/modules/ticketing/domain/events/entities/event.aggregate";
 import { EventRepository } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
 import type {
   CreateEventRecordParams,
@@ -294,6 +295,9 @@ function toEventProps(row: EventRow) {
     bannerUrl: row.bannerUrl,
     modality: row.modality,
     chargeType: row.chargeType,
+    paymentMode: (row.paymentMode as EventPaymentMode) ?? "pagbank",
+    pixCode: row.pixCode ?? null,
+    pixQrCodeUrl: row.pixQrCodeUrl ?? null,
     status: row.status,
     startAt: row.startAt,
     endAt: row.endAt,
@@ -317,7 +321,9 @@ function toEventInsert(event: Event) {
   const props = event.propsSnapshot;
   return {
     id: event.id.toString(), title: props.title, description: props.description, summary: props.summary, slug: props.slug,
-    bannerUrl: props.bannerUrl, modality: props.modality, chargeType: props.chargeType, status: props.status,
+    bannerUrl: props.bannerUrl, modality: props.modality, chargeType: props.chargeType,
+    paymentMode: props.paymentMode ?? "pagbank", pixCode: props.pixCode ?? null, pixQrCodeUrl: props.pixQrCodeUrl ?? null,
+    status: props.status,
     startAt: props.startAt, endAt: props.endAt, registrationStartAt: props.registrationStartAt, registrationEndAt: props.registrationEndAt,
     maxCapacity: props.maxCapacity, allowsWaitlist: props.allowsWaitlist, onlineUrl: props.onlineUrl,
     addressStreet: props.address?.street ?? null, addressNumber: props.address?.number ?? null, addressComplement: props.address?.complement ?? null,
@@ -331,7 +337,9 @@ function toEventInsert(event: Event) {
 function toEventUpdate(props: EventReadModel["props"]) {
   return {
     title: props.title, description: props.description, summary: props.summary, slug: props.slug, bannerUrl: props.bannerUrl,
-    modality: props.modality, chargeType: props.chargeType, status: props.status, startAt: props.startAt, endAt: props.endAt,
+    modality: props.modality, chargeType: props.chargeType,
+    paymentMode: props.paymentMode ?? "pagbank", pixCode: props.pixCode ?? null, pixQrCodeUrl: props.pixQrCodeUrl ?? null,
+    status: props.status, startAt: props.startAt, endAt: props.endAt,
     registrationStartAt: props.registrationStartAt, registrationEndAt: props.registrationEndAt, maxCapacity: props.maxCapacity,
     allowsWaitlist: props.allowsWaitlist, onlineUrl: props.onlineUrl, addressStreet: props.address?.street ?? null,
     addressNumber: props.address?.number ?? null, addressComplement: props.address?.complement ?? null,

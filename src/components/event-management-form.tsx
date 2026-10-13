@@ -5,9 +5,11 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowLeft,
+  CreditCard,
   FileImage,
   LoaderCircle,
   Plus,
+  QrCode,
   Save,
   Trash2,
 } from "lucide-react";
@@ -41,6 +43,9 @@ type EventDraft = {
   bannerUrl: string;
   modality: "presencial" | "online";
   chargeType: "gratuito" | "pago";
+  paymentMode: "pagbank" | "pix_manual";
+  pixCode: string;
+  pixQrCodeUrl: string;
   startAt: string;
   endAt: string;
   registrationStartAt: string;
@@ -151,6 +156,9 @@ function createEmptyDraft(): EventDraft {
     bannerUrl: "",
     modality: "presencial",
     chargeType: "gratuito",
+    paymentMode: "pagbank",
+    pixCode: "",
+    pixQrCodeUrl: "",
     startAt: "",
     endAt: "",
     registrationStartAt: "",
@@ -211,6 +219,10 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
     "idle" | "uploading" | "uploaded"
   >("idle");
   const [bannerError, setBannerError] = useState<string | null>(null);
+  const [pixQrState, setPixQrState] = useState<
+    "idle" | "uploading" | "uploaded"
+  >("idle");
+  const [pixQrError, setPixQrError] = useState<string | null>(null);
   const canWrite = Boolean(auth.session?.permissions.includes("events:write"));
 
   useEffect(() => {
@@ -248,6 +260,9 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
           bannerUrl: data.props.bannerUrl ?? "",
           modality: data.props.modality,
           chargeType: data.props.chargeType,
+          paymentMode: data.props.paymentMode ?? "pagbank",
+          pixCode: data.props.pixCode ?? "",
+          pixQrCodeUrl: data.props.pixQrCodeUrl ?? "",
           startAt: toDatetimeLocalValue(data.props.startAt),
           endAt: toDatetimeLocalValue(data.props.endAt),
           registrationStartAt: toDatetimeLocalValue(data.props.registrationStartAt),
@@ -288,6 +303,9 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
         });
         if (data.props.bannerUrl) {
           setBannerState("uploaded");
+        }
+        if (data.props.pixQrCodeUrl) {
+          setPixQrState("uploaded");
         }
       } catch (caught) {
         if (!active) return;
@@ -456,6 +474,32 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
     }
   }
 
+  async function uploadPixQr(params: { file: File }): Promise<void> {
+    setPixQrError(null);
+    setPixQrState("uploading");
+    try {
+      const content = new Uint8Array(await params.file.arrayBuffer());
+      const validation = bannerValidator.execute({
+        mimeType: params.file.type,
+        sizeBytes: params.file.size,
+        content,
+      });
+      if (validation.isFailure) throw validation.error;
+      const pixQrCodeUrl = await ticketingApi.uploadEventPixQr({
+        file: params.file,
+      });
+      setDraft((current) => ({ ...current, pixQrCodeUrl }));
+      setPixQrState("uploaded");
+    } catch (caught) {
+      setPixQrState("idle");
+      setPixQrError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível enviar o QR Code do PIX.",
+      );
+    }
+  }
+
   const fieldsChanged =
     isEditing && hasCustomFieldsChanged(initialFields, draft.fields);
 
@@ -592,6 +636,9 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
           onBanner={uploadBanner}
           bannerState={bannerState}
           bannerError={bannerError}
+          onPixQr={uploadPixQr}
+          pixQrState={pixQrState}
+          pixQrError={pixQrError}
         />
         <EventScheduleSection
           draft={draft}
@@ -637,7 +684,11 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button
             type="submit"
-            disabled={saving || bannerState === "uploading"}
+            disabled={
+              saving ||
+              bannerState === "uploading" ||
+              pixQrState === "uploading"
+            }
           >
             {saving ? (
               <>
@@ -734,10 +785,16 @@ function BasicEventSection({
   onBanner,
   bannerState,
   bannerError,
+  onPixQr,
+  pixQrState,
+  pixQrError,
 }: EventSectionProps & {
   onBanner: (params: UploadBannerParams) => Promise<void>;
   bannerState: "idle" | "uploading" | "uploaded";
   bannerError: string | null;
+  onPixQr: (params: { file: File }) => Promise<void>;
+  pixQrState: "idle" | "uploading" | "uploaded";
+  pixQrError: string | null;
 }) {
   function change(
     event: ChangeEvent<
@@ -838,6 +895,110 @@ function BasicEventSection({
             <option value="pago">Pago</option>
           </select>
         </Field>
+
+        {draft.chargeType === "pago" ? (
+          <>
+            <Field
+              label="Modo de pagamento"
+              htmlFor="event-payment-mode"
+              hint="Selecione o provedor para eventos pagos."
+            >
+              <select
+                id="event-payment-mode"
+                value={draft.paymentMode}
+                onChange={(event) => change(event, "paymentMode")}
+                className={selectCls}
+              >
+                <option value="pagbank">
+                  PagBank (Gateway: Cartão, Boleto e PIX automático)
+                </option>
+                <option value="pix_manual">
+                  PIX Direto / Manual (QR Code e Copia e Cola)
+                </option>
+              </select>
+            </Field>
+
+            {draft.paymentMode === "pix_manual" ? (
+              <div className="space-y-4 rounded-app-md border border-app-primary/30 bg-app-surface-elevated/40 p-4 sm:col-span-2">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-app-primary" aria-hidden="true" />
+                  <p className="text-xs font-bold uppercase tracking-wider text-app-foreground">
+                    Configuração do PIX Direto
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field
+                    label="Código PIX Copia e Cola *"
+                    htmlFor="event-pix-code"
+                    hint="Cole o código PIX Copia e Cola (payload EMV) gerado pelo seu banco."
+                    error={errors.pixCode}
+                    className="sm:col-span-2"
+                  >
+                    <textarea
+                      id="event-pix-code"
+                      value={draft.pixCode}
+                      onChange={(event) => change(event, "pixCode")}
+                      rows={3}
+                      className={textAreaClass}
+                      placeholder="00020126...5802BR59..."
+                      aria-invalid={Boolean(errors.pixCode)}
+                    />
+                  </Field>
+
+                  <Field
+                    label="Imagem do QR Code do PIX *"
+                    htmlFor="event-pix-qr"
+                    hint="Imagem PNG ou JPG de até 10 MB com o QR Code para pagamento."
+                    error={pixQrError ?? errors.pixQrCodeUrl}
+                    className="sm:col-span-2"
+                  >
+                    <div className="flex flex-wrap items-center gap-3">
+                      <input
+                        id="event-pix-qr"
+                        type="file"
+                        accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) void onPixQr({ file });
+                        }}
+                        className="min-w-0 flex-1 text-xs text-app-muted-foreground file:mr-3 file:rounded-app-sm file:border-0 file:bg-app-surface-elevated file:px-3 file:py-2 file:text-xs file:font-semibold file:text-app-foreground"
+                      />
+                      <span className="inline-flex items-center gap-1.5 text-xs text-app-muted-foreground">
+                        {pixQrState === "uploading" ? (
+                          <LoaderCircle
+                            className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <FileImage className="h-3.5 w-3.5" aria-hidden="true" />
+                        )}
+                        {pixQrState === "uploading"
+                          ? "Enviando…"
+                          : pixQrState === "uploaded"
+                            ? "QR Code enviado"
+                            : "Obrigatório no PIX"}
+                      </span>
+                    </div>
+                    {draft.pixQrCodeUrl ? (
+                      <div className="mt-3 flex items-center gap-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={draft.pixQrCodeUrl}
+                          alt="Prévia do QR Code PIX"
+                          className="h-32 w-32 rounded-app-md border border-app-border bg-white p-1 object-contain"
+                        />
+                        <p className="text-xs text-app-muted-foreground">
+                          QR Code carregado. Os participantes escanearão esta imagem para realizar o pagamento.
+                        </p>
+                      </div>
+                    ) : null}
+                  </Field>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
         <Field
           label="Banner público"
           htmlFor="event-banner"
@@ -1808,6 +1969,12 @@ function validateEventDraft(
       "Preencha o endereço completo e informe uma UF válida.";
   if (draft.modality === "online" && !isSecureUrl(draft.onlineUrl))
     errors.onlineUrl = "Informe uma URL HTTPS válida.";
+  if (draft.chargeType === "pago" && draft.paymentMode === "pix_manual") {
+    if (!draft.pixCode.trim())
+      errors.pixCode = "Informe o código PIX Copia e Cola.";
+    if (!draft.pixQrCodeUrl.trim())
+      errors.pixQrCodeUrl = "Anexe a imagem do QR Code para o PIX.";
+  }
   const lots =
     draft.chargeType === "pago"
       ? draft.lots.map((lot) => ({
@@ -1885,6 +2052,15 @@ function validateEventDraft(
     bannerUrl: draft.bannerUrl || null,
     modality: draft.modality,
     chargeType: draft.chargeType,
+    paymentMode: draft.paymentMode,
+    pixCode:
+      draft.chargeType === "pago" && draft.paymentMode === "pix_manual"
+        ? draft.pixCode.trim() || null
+        : null,
+    pixQrCodeUrl:
+      draft.chargeType === "pago" && draft.paymentMode === "pix_manual"
+        ? draft.pixQrCodeUrl.trim() || null
+        : null,
     startAt,
     endAt,
     registrationStartAt,

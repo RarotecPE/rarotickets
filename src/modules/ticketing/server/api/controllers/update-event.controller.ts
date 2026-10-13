@@ -25,7 +25,12 @@ export class UpdateEventController extends Controller<UpdateEventRequest, NextRe
       const { lots, fields, activities, ...props } = parsed.value;
       const result = await this.useCase.execute({
         eventId: input.eventId,
-        props,
+        props: {
+          ...props,
+          paymentMode: props.paymentMode ?? "pagbank",
+          pixCode: props.pixCode ?? null,
+          pixQrCodeUrl: props.pixQrCodeUrl ?? null,
+        },
         userId: guard.session.user.id,
         userName: guard.session.user.nome,
         canViewAll: guard.scope.canViewAllEvents,

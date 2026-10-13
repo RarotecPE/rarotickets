@@ -49,6 +49,9 @@ export type PublicRegistrationResult = {
   checkoutUrl: string | null;
   accessTokenHash: string;
   shouldCreateCheckout: boolean;
+  paymentMode?: string | null;
+  pixCode?: string | null;
+  pixQrCodeUrl?: string | null;
 };
 export type ReserveRegistrationResult = PublicRegistrationResult;
 export type CreatePublicRegistrationOutput = Result<ReserveRegistrationResult, RegistrationRuleError>;
@@ -112,6 +115,9 @@ export type ParticipantPortalView = {
   checkoutUrl: string | null;
   paymentProvider?: string | null;
   paymentExternalId?: string | null;
+  paymentMode?: string | null;
+  pixCode?: string | null;
+  pixQrCodeUrl?: string | null;
   certificateCode: string | null;
   certificateIssuedAt: Date | null;
 };
@@ -142,6 +148,7 @@ export type RegistrationListItem = {
   eventTitle: string;
   eventModality: string;
   eventChargeType: string;
+  eventPaymentMode?: string | null;
   eventStartAt: Date;
   participantId: string;
   participantName: string;
@@ -191,6 +198,28 @@ export type RegistrationListItem = {
 export type RegistrationListResult = { items: RegistrationListItem[]; total: number };
 export type RegistrationEventAccessParams = { eventId: string; userId: string; canViewAll: boolean };
 export type CancelRegistrationParams = { registrationId: string; reason: string; actorId: string; at: Date; canManageAll: boolean };
+export type ConfirmManualPaymentParams = { registrationId: string; actorId: string; at: Date; canManageAll: boolean };
+export type ConfirmManualPaymentResult = {
+  registrationId: string;
+  registrationCode: string;
+  status: RegistrationStatus;
+  participantName: string;
+  participantEmail: string;
+  eventId: string;
+  eventTitle: string;
+  eventStartAt: Date;
+  eventEndAt: Date;
+  modality: string;
+  location: string | null;
+  onlineUrl: string | null;
+  lotName: string | null;
+  originalCents: number;
+  discountCents: number;
+  finalCents: number;
+  paidAt: Date;
+  paymentProvider: string;
+  paymentExternalId: string | null;
+};
 export type PaymentWebhookUpdateParams = { provider: string; eventId: string; referenceId: string; externalId: string; status: string; amountCents: number | null; payload: Record<string, unknown>; at: Date };
 export type PaymentWebhookUpdateResult = { duplicate: boolean; registrationCode: string | null; status: RegistrationStatus | null; refundRequired: boolean };
 export type MockPaymentParams = { referenceId: string; status: "PAID" | "DECLINED"; at: Date };
@@ -210,6 +239,7 @@ export interface IRegistrationRepository extends IWaitlistPromotionRepository {
   findPrivateFile(params: FindPrivateRegistrationFileParams): Promise<PrivateRegistrationFile | null>;
   list(params: ListRegistrationsParams): Promise<RegistrationListResult>;
   cancel(params: CancelRegistrationParams): Promise<CancelRegistrationResult | null>;
+  confirmManualPayment(params: ConfirmManualPaymentParams): Promise<ConfirmManualPaymentResult | null>;
   findNextWaitlisted(params: FindNextWaitlistedParams): Promise<WaitlistCandidate | null>;
   promoteNextWaitlisted(params: PromoteNextWaitlistedParams): Promise<WaitlistPromotionResult | null>;
   listWaitlistedEventIds(): Promise<string[]>;
@@ -227,6 +257,7 @@ export abstract class RegistrationRepository implements IRegistrationRepository 
   abstract findPrivateFile(params: FindPrivateRegistrationFileParams): Promise<PrivateRegistrationFile | null>;
   abstract list(params: ListRegistrationsParams): Promise<RegistrationListResult>;
   abstract cancel(params: CancelRegistrationParams): Promise<CancelRegistrationResult | null>;
+  abstract confirmManualPayment(params: ConfirmManualPaymentParams): Promise<ConfirmManualPaymentResult | null>;
   abstract findNextWaitlisted(params: FindNextWaitlistedParams): Promise<WaitlistCandidate | null>;
   abstract promoteNextWaitlisted(params: PromoteNextWaitlistedParams): Promise<WaitlistPromotionResult | null>;
   abstract listWaitlistedEventIds(): Promise<string[]>;
