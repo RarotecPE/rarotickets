@@ -68,22 +68,25 @@ export class PagBankGateway extends PaymentGateway {
       cache: "no-store",
       signal: AbortSignal.timeout(12_000),
     });
-    const payload: unknown = await response.json().catch(() => null);
+    const responseText = await response.text().catch(() => "");
+    let payload: unknown = null;
+    try {
+      payload = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      payload = responseText;
+    }
+
     if (!response.ok) {
-      console.error("[PagBankGateway] Falha ao criar checkout no PagBank:", {
-        status: response.status,
-        baseUrl: environment.pagBankBaseUrl,
-        referenceId: params.referenceId,
-        payload,
-      });
+      console.error(
+        `[PagBankGateway] Falha ao criar checkout no PagBank (HTTP ${response.status}) [ref: ${params.referenceId}, url: ${environment.pagBankBaseUrl}/checkouts]:\n${JSON.stringify(payload ?? responseText, null, 2)}`,
+      );
       throw new Error("Não foi possível iniciar o pagamento no momento. Tente novamente em instantes.");
     }
     const checkout = readCheckout(payload);
     if (!checkout) {
-      console.error("[PagBankGateway] Resposta do PagBank sem link de checkout:", {
-        referenceId: params.referenceId,
-        payload,
-      });
+      console.error(
+        `[PagBankGateway] Resposta do PagBank sem link de checkout [ref: ${params.referenceId}]:\n${JSON.stringify(payload ?? responseText, null, 2)}`,
+      );
       throw new Error("Não foi possível iniciar o pagamento no momento. Tente novamente em instantes.");
     }
     return { ...checkout, provider: "pagbank" };
