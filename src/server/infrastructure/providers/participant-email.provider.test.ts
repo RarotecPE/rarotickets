@@ -202,5 +202,51 @@ describe("ParticipantEmailProvider", () => {
       "credencial-RT-2026-FREE01.png",
     );
   });
+
+  it("envia e-mail de notificação de PIX pendente para a equipe exibindo o nome do participante no assunto", async () => {
+    let capturedOptions: SendEmailOptions | null = null;
+    const mockClient = {
+      send: vi.fn().mockImplementation((options: SendEmailOptions) => {
+        capturedOptions = options;
+        return Promise.resolve({ sent: true, messageId: "msg-pix-pending" });
+      }),
+    } as unknown as RaroNexusEmailClient;
+
+    const mockFileStorage = {
+      storePublic: vi.fn(),
+      storePrivate: vi.fn(),
+      read: vi.fn(),
+      delete: vi.fn(),
+    } as unknown as IFileStorageProvider;
+
+    const provider = new ParticipantEmailProvider(mockClient, mockFileStorage);
+
+    await provider.sendPixPendingNotificationEmail({
+      toEmail: "equipe@evento.com",
+      eventTitle: "Workshop de Arquitetura",
+      registrationCode: "RT-2026-PIX99",
+      participantName: "Ana Clara Silva",
+      participantEmail: "anaclara@teste.com",
+      amountCents: 5000,
+      createdAt: new Date("2026-10-13T10:00:00.000Z"),
+      reservationExpiresAt: new Date("2026-10-14T10:00:00.000Z"),
+    });
+
+    expect(mockClient.send).toHaveBeenCalledTimes(1);
+    expect(capturedOptions).not.toBeNull();
+    expect(capturedOptions!.to).toBe("equipe@evento.com");
+    expect(capturedOptions!.subject).toContain("Ana Clara Silva");
+    expect(capturedOptions!.subject).toBe(
+      "Nova inscrição via PIX: Ana Clara Silva - Workshop de Arquitetura (RT-2026-PIX99)",
+    );
+    expect(capturedOptions!.body).toContain("Ana Clara Silva");
+    expect(capturedOptions!.body).toContain("RT-2026-PIX99");
+    expect(capturedOptions!.metadata).toMatchObject({
+      participantName: "Ana Clara Silva",
+      eventTitle: "Workshop de Arquitetura",
+      registrationCode: "RT-2026-PIX99",
+      amountCents: 5000,
+    });
+  });
 });
 

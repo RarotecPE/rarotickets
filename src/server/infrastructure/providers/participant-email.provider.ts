@@ -490,7 +490,7 @@ export class ParticipantEmailProvider implements IParticipantEmailSender {
     try {
       await this.emailClient.send({
         to: params.toEmail,
-        subject: `Nova inscrição via PIX: ${params.eventTitle} (${params.registrationCode})`,
+        subject: `Nova inscrição via PIX: ${params.participantName} - ${params.eventTitle} (${params.registrationCode})`,
         body: bodyHtml,
         endpoint,
         metadata: {
