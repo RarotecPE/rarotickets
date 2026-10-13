@@ -183,12 +183,6 @@ function EventHero({ event }: EventHeroProps) {
 
 export type EventSummaryProps = { event: EventReadModel };
 function EventSummary({ event }: EventSummaryProps) {
-  const remaining = Math.max(
-    0,
-    event.props.maxCapacity -
-      event.capacity.confirmed -
-      event.capacity.reserved,
-  );
   const place =
     event.props.modality === "online"
       ? "Online"
@@ -229,25 +223,15 @@ function EventSummary({ event }: EventSummaryProps) {
           value={place}
         />
         <div className="border-t border-app-border pt-4">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-xs text-app-muted-foreground">Investimento</p>
-              <p className="mt-1 text-lg font-bold text-app-foreground">
-                {minimumPrice === 0
-                  ? "Gratuito"
-                  : minimumPrice !== null
-                    ? `A partir de ${formatCurrency({ cents: minimumPrice })}`
-                    : "Consulte"}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-app-muted-foreground">
-                Vagas disponíveis
-              </p>
-              <p className="mt-1 text-lg font-bold text-app-foreground tabular-nums">
-                {remaining}
-              </p>
-            </div>
+          <div>
+            <p className="text-xs text-app-muted-foreground">Investimento</p>
+            <p className="mt-1 text-lg font-bold text-app-foreground">
+              {minimumPrice === 0
+                ? "Gratuito"
+                : minimumPrice !== null
+                  ? formatCurrency({ cents: minimumPrice })
+                  : "Consulte"}
+            </p>
           </div>
         </div>
         <p className="text-xs text-app-muted-foreground">

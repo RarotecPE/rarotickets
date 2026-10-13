@@ -1410,7 +1410,7 @@ export function PublicRegistrationConfirmationPage({
                   <option value="">Selecione um lote</option>
                   {availableLots.map((lot) => (
                     <option key={lot.id} value={lot.id}>
-                      {lot.name} — {formatCurrency({ cents: lot.priceCents })} ({Math.max(0, lot.maxQuantity - lot.soldCount)} vagas disponíveis)
+                      {lot.name} — {formatCurrency({ cents: lot.priceCents })}
                     </option>
                   ))}
                 </select>
