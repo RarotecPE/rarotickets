@@ -211,6 +211,80 @@ function toDatetimeLocalValue(
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+const PENDENCY_FIELD_METADATA: Record<
+  string,
+  { label: string; targetId?: string }
+> = {
+  title: { label: "Título do evento", targetId: "event-title" },
+  slug: { label: "Identificador (slug)", targetId: "event-slug" },
+  summary: { label: "Resumo", targetId: "event-summary" },
+  description: { label: "Descrição detalhada", targetId: "event-description" },
+  responsibleName: {
+    label: "Pessoa responsável",
+    targetId: "event-responsible-name",
+  },
+  responsibleEmail: {
+    label: "E-mail do responsável",
+    targetId: "event-responsible-email",
+  },
+  startAt: { label: "Início do evento", targetId: "event-start" },
+  endAt: { label: "Término do evento", targetId: "event-end" },
+  registrationStartAt: {
+    label: "Abertura das inscrições",
+    targetId: "registration-start",
+  },
+  registrationEndAt: {
+    label: "Encerramento das inscrições",
+    targetId: "registration-end",
+  },
+  maxCapacity: { label: "Capacidade máxima", targetId: "event-capacity" },
+  addressStreet: { label: "Endereço (logradouro)", targetId: "address-street" },
+  addressNumber: { label: "Número do endereço", targetId: "address-number" },
+  addressNeighborhood: { label: "Bairro", targetId: "address-neighborhood" },
+  addressMunicipality: { label: "Município", targetId: "address-municipality" },
+  addressState: { label: "UF / Estado", targetId: "address-state" },
+  onlineUrl: {
+    label: "Link de transmissão online",
+    targetId: "event-online-url",
+  },
+  pixCode: {
+    label: "Código PIX Copia e Cola",
+    targetId: "event-pix-code",
+  },
+  pixQrCodeUrl: { label: "QR Code do PIX", targetId: "event-pix-qr" },
+  pixBankName: {
+    label: "Banco para depósito PIX",
+    targetId: "event-pix-bank-name",
+  },
+  pixBankAgency: {
+    label: "Agência da conta PIX",
+    targetId: "event-pix-bank-agency",
+  },
+  pixBankAccount: {
+    label: "Número da conta PIX",
+    targetId: "event-pix-bank-account",
+  },
+  pixBankAccountType: {
+    label: "Tipo de conta PIX",
+    targetId: "event-pix-bank-account-type",
+  },
+  pixBankCnpj: { label: "CNPJ da conta PIX", targetId: "event-pix-bank-cnpj" },
+  pixBankAccountHolder: {
+    label: "Titular da conta PIX",
+    targetId: "event-pix-bank-account-holder",
+  },
+  pixNotificationEmail: {
+    label: "E-mail de notificação PIX",
+    targetId: "event-pix-notification-email",
+  },
+  lots: { label: "Lotes de ingressos", targetId: "ticket-lots-section" },
+  configuration: {
+    label: "Configuração do evento",
+    targetId: "ticket-lots-section",
+  },
+  general: { label: "Dados obrigatórios" },
+};
+
 export type EventManagementFormProps = {
   eventId?: string;
 };
@@ -616,6 +690,50 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
     );
   }
 
+  const pendencies: Array<{
+    key: string;
+    label: string;
+    message: string;
+    targetId?: string;
+  }> = [];
+
+  for (const [key, msg] of Object.entries(errors)) {
+    if (!msg || typeof msg !== "string" || !msg.trim()) continue;
+    const meta = PENDENCY_FIELD_METADATA[key];
+    pendencies.push({
+      key,
+      label: meta?.label ?? key,
+      message: msg,
+      targetId: meta?.targetId,
+    });
+  }
+
+  if (bannerError) {
+    pendencies.push({
+      key: "bannerError",
+      label: "Banner público",
+      message: bannerError,
+      targetId: "event-banner",
+    });
+  }
+
+  if (pixQrError && !errors.pixQrCodeUrl) {
+    pendencies.push({
+      key: "pixQrError",
+      label: "QR Code do PIX",
+      message: pixQrError,
+      targetId: "event-pix-qr",
+    });
+  }
+
+  if (error && error !== "Revise os campos destacados e tente novamente.") {
+    pendencies.push({
+      key: "formError",
+      label: "Erro ao salvar",
+      message: error,
+    });
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -702,6 +820,49 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
           onRemove={(rowId) => removeRow({ kind: "activity", rowId })}
         />
         <EventCertificateSection draft={draft} onChange={updateDraft} />
+        {pendencies.length > 0 ? (
+          <div
+            role="alert"
+            className="rounded-app-md border border-app-danger/40 bg-app-danger/10 p-4 text-app-foreground"
+          >
+            <div className="flex items-center gap-2 font-semibold text-app-danger">
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                {pendencies.length === 1
+                  ? "Existe 1 pendência no formulário para salvar o evento:"
+                  : `Existem ${pendencies.length} pendências no formulário para salvar o evento:`}
+              </span>
+            </div>
+            <ul className="mt-2.5 space-y-1.5 pl-5 text-xs text-app-foreground/90 list-disc">
+              {pendencies.map((pendency) => (
+                <li key={pendency.key}>
+                  <strong className="text-app-foreground">{pendency.label}:</strong>{" "}
+                  <span>{pendency.message}</span>
+                  {pendency.targetId ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const element = document.getElementById(pendency.targetId!);
+                        if (element) {
+                          element.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          });
+                          if ("focus" in element && typeof element.focus === "function") {
+                            element.focus();
+                          }
+                        }
+                      }}
+                      className="ml-2 inline-flex items-center gap-0.5 font-medium text-app-primary underline hover:opacity-80"
+                    >
+                      Ir para o campo &rarr;
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button
             type="submit"
@@ -1476,7 +1637,7 @@ function TicketLotsSection({
 }) {
   if (draft.chargeType !== "pago") return null;
   return (
-    <Panel>
+    <Panel id="ticket-lots-section">
       <PanelHeader
         title="Lotes de ingressos"
         description="Lotes ativos são liberados automaticamente por período e disponibilidade."
