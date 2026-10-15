@@ -1,6 +1,7 @@
 import type { DiscountType } from "../services/pricing.domain-service";
 import type { RegistrationStatus } from "../entities/registration.aggregate";
 import type { Result } from "@/@core/domain/result";
+import type { DomainError } from "@/@core/domain/errors/domain-error.base";
 import type { RegistrationRuleError } from "../entities/registration.aggregate";
 
 export type ParticipantInput = {
@@ -235,7 +236,25 @@ export type ConfirmManualPaymentResult = {
 export type PaymentWebhookUpdateParams = { provider: string; eventId: string; referenceId: string; externalId: string; status: string; amountCents: number | null; payload: Record<string, unknown>; at: Date };
 export type PaymentWebhookUpdateResult = { duplicate: boolean; registrationCode: string | null; status: RegistrationStatus | null; refundRequired: boolean };
 export type MockPaymentParams = { referenceId: string; status: "PAID" | "DECLINED"; at: Date };
-export type CouponReadModel = { id: string; code: string; type: DiscountType; discountValue: number; maxUses: number | null; usedCount: number; startAt: Date; endAt: Date; active: boolean };
+export type CouponReadModel = { id: string; lotId: string; code: string; type: DiscountType; discountValue: number; maxUses: number | null; usedCount: number; startAt: Date; endAt: Date; active: boolean; allowedEmails: string[]; allowedCpfs: string[] };
+
+export type ValidateCouponParams = {
+  eventId: string;
+  lotId: string;
+  code: string;
+  participantEmail?: string | null;
+  participantCpf?: string | null;
+  at: Date;
+};
+export type ValidatedCouponResult = {
+  couponId: string;
+  code: string;
+  type: DiscountType;
+  discountValue: number;
+  originalCents: number;
+  discountCents: number;
+  finalCents: number;
+};
 
 export interface IWaitlistPromotionRepository {
   findNextWaitlisted(params: FindNextWaitlistedParams): Promise<WaitlistCandidate | null>;
@@ -258,6 +277,7 @@ export interface IRegistrationRepository extends IWaitlistPromotionRepository {
   applyPaymentWebhook(params: PaymentWebhookUpdateParams): Promise<PaymentWebhookUpdateResult>;
   simulatePayment(params: MockPaymentParams): Promise<PaymentWebhookUpdateResult>;
   expireReservations(params: ExpireReservationsParams): Promise<ExpireReservationsResult>;
+  validateCoupon(params: ValidateCouponParams): Promise<Result<ValidatedCouponResult, DomainError>>;
 }
 
 export abstract class RegistrationRepository implements IRegistrationRepository {
@@ -276,4 +296,5 @@ export abstract class RegistrationRepository implements IRegistrationRepository 
   abstract applyPaymentWebhook(params: PaymentWebhookUpdateParams): Promise<PaymentWebhookUpdateResult>;
   abstract simulatePayment(params: MockPaymentParams): Promise<PaymentWebhookUpdateResult>;
   abstract expireReservations(params: ExpireReservationsParams): Promise<ExpireReservationsResult>;
+  abstract validateCoupon(params: ValidateCouponParams): Promise<Result<ValidatedCouponResult, DomainError>>;
 }

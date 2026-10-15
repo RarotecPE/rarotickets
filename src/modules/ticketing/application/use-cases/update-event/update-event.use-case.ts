@@ -105,6 +105,11 @@ export class UpdateEventUseCase extends UseCase<UpdateEventInputDto, UpdateEvent
     const lots: NewEventLot[] | undefined = input.lots?.map((lot) => ({
       ...lot,
       id: lot.id || nextId(),
+      coupons: lot.coupons?.map((c) => ({
+        ...c,
+        id: c.id || nextId(),
+        code: c.code.trim().toUpperCase(),
+      })),
     }));
 
     if (

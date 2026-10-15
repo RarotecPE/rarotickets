@@ -119,7 +119,15 @@ export class CreateEventUseCase extends UseCase<CreateEventInputDto & CreateEven
     if (eventResult.isFailure) return Result.fail(eventResult.error);
     const event = await this.eventRepository.create({
       event: eventResult.value,
-      lots: input.lots.map((lot) => ({ ...lot, id: this.idGenerator.next() })),
+      lots: input.lots.map((lot) => ({
+        ...lot,
+        id: this.idGenerator.next(),
+        coupons: (lot.coupons ?? []).map((coupon) => ({
+          ...coupon,
+          id: coupon.id ?? this.idGenerator.next(),
+          code: coupon.code.trim().toUpperCase(),
+        })),
+      })),
       fields: input.fields.map((field) => ({ ...field, id: this.idGenerator.next() })),
       activities: input.activities.map((activity) => ({ ...activity, id: this.idGenerator.next() })),
     });

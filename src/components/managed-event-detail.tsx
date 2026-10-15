@@ -581,7 +581,7 @@ function LotsPanel({ event }: { event: EventReadModel }) {
             <caption className="sr-only">Lotes do evento</caption>
             <thead>
               <tr className="border-b border-app-border">
-                {["Nome", "Preço", "Vendidos", "Período", "Situação"].map(
+                {["Nome", "Preço", "Vendidos", "Período", "Cupons", "Situação"].map(
                   (label) => (
                     <th
                       key={label}
@@ -613,6 +613,23 @@ function LotsPanel({ event }: { event: EventReadModel }) {
                     {formatDate({ value: lot.startAt, withTime: true })}
                     <br />
                     até {formatDate({ value: lot.endAt, withTime: true })}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-app-muted-foreground">
+                    {lot.coupons && lot.coupons.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {lot.coupons.map((c) => (
+                          <span
+                            key={c.id}
+                            title={`${c.code} (${c.type === "percentual" ? `${c.discountValue}%` : formatCurrency({ cents: c.discountValue })})`}
+                            className="inline-flex items-center gap-1 rounded bg-app-surface-elevated px-1.5 py-0.5 font-mono text-[11px] font-semibold text-app-foreground border border-app-border"
+                          >
+                            {c.code}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-app-muted-foreground">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <Badge tone={lot.active ? "success" : "muted"}>

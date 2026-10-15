@@ -34,6 +34,6 @@ export class PricingDomainService extends DomainService<CalculatePriceParams, Ca
     if (params.discountType === "percentual") {
       return Math.round((params.originalCents * Math.min(value, 100)) / 100);
     }
-    return Math.round(value * 100);
+    return Math.round(value);
   }
 }

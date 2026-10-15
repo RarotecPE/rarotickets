@@ -90,4 +90,101 @@ describe("EventConfigurationDomainService", () => {
     expect(result.isFailure).toBe(true);
     expect(result.error.message).toContain("período do evento");
   });
+
+  it("rejeita cupom com código fora do padrão ou duplicado", () => {
+    const result = service.execute(
+      createConfiguration({
+        chargeType: "pago",
+        lots: [
+          {
+            name: "Lote 1",
+            priceCents: 10000,
+            maxQuantity: 50,
+            startAt: registrationStartAt,
+            endAt: registrationEndAt,
+            coupons: [
+              {
+                code: "INVALID-CODE!",
+                type: "percentual",
+                discountValue: 10,
+                startAt: registrationStartAt,
+                endAt: registrationEndAt,
+                active: true,
+                allowedEmails: [],
+                allowedCpfs: [],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(result.isFailure).toBe(true);
+    expect(result.error.message).toContain("apenas letras e números");
+  });
+
+  it("rejeita cupom com datas fora do período do lote", () => {
+    const lotStart = new Date("2026-11-05T00:00:00.000Z");
+    const lotEnd = new Date("2026-11-20T00:00:00.000Z");
+    const result = service.execute(
+      createConfiguration({
+        chargeType: "pago",
+        lots: [
+          {
+            name: "Lote 1",
+            priceCents: 10000,
+            maxQuantity: 50,
+            startAt: lotStart,
+            endAt: lotEnd,
+            coupons: [
+              {
+                code: "PROMO10",
+                type: "percentual",
+                discountValue: 10,
+                startAt: new Date("2026-11-04T23:59:59.000Z"), // before lot
+                endAt: lotEnd,
+                active: true,
+                allowedEmails: [],
+                allowedCpfs: [],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(result.isFailure).toBe(true);
+    expect(result.error.message).toContain("estritamente dentro do período de vendas do lote");
+  });
+
+  it("rejeita cupom com desconto fixo maior que o valor do lote", () => {
+    const lotStart = new Date("2026-11-05T00:00:00.000Z");
+    const lotEnd = new Date("2026-11-20T00:00:00.000Z");
+    const result = service.execute(
+      createConfiguration({
+        chargeType: "pago",
+        lots: [
+          {
+            name: "Lote 1",
+            priceCents: 5000, // R$ 50,00
+            maxQuantity: 50,
+            startAt: lotStart,
+            endAt: lotEnd,
+            coupons: [
+              {
+                code: "DESCONTOMAIOR",
+                type: "valor_fixo",
+                discountValue: 6000, // R$ 60,00
+                startAt: lotStart,
+                endAt: lotEnd,
+                active: true,
+                allowedEmails: [],
+                allowedCpfs: [],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(result.isFailure).toBe(true);
+    expect(result.error.message).toContain("não pode exceder o valor do lote");
+  });
 });

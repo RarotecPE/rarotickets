@@ -164,6 +164,7 @@ export const participantAuthTokens = pgTable("participant_auth_tokens", {
 export const coupons = pgTable("coupons", {
   id: uuid("id").defaultRandom().primaryKey(),
   eventId: uuid("event_id").references(() => events.id),
+  lotId: uuid("lot_id").notNull().references(() => ticketLots.id, { onDelete: "cascade" }),
   code: varchar("code", { length: 40 }).notNull(),
   type: discountTypeEnum("type").notNull(),
   discountValue: integer("discount_value").notNull(),
@@ -172,10 +173,13 @@ export const coupons = pgTable("coupons", {
   startAt: timestamp("start_at", { withTimezone: true, mode: "date" }).notNull(),
   endAt: timestamp("end_at", { withTimezone: true, mode: "date" }).notNull(),
   active: boolean("active").default(true).notNull(),
+  allowedEmails: jsonb("allowed_emails").$type<string[]>().default([]).notNull(),
+  allowedCpfs: jsonb("allowed_cpfs").$type<string[]>().default([]).notNull(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (table) => [
-  uniqueIndex("coupons_code_unique").on(table.code),
+  uniqueIndex("coupons_event_code_unique").on(table.eventId, table.code),
+  index("coupons_lot_id_idx").on(table.lotId),
   index("coupons_event_active_idx").on(table.eventId, table.active),
   check("coupons_discount_nonnegative", sql`${table.discountValue} >= 0`),
   check("coupons_used_nonnegative", sql`${table.usedCount} >= 0`),

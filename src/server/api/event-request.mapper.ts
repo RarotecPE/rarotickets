@@ -1,6 +1,7 @@
 import { Result } from "@/@core/domain/result";
 import type { EventAddress, EventChargeType, EventModality, EventPaymentMode } from "@/modules/ticketing/domain/events/entities/event.aggregate";
 import type { CreateEventInputDto, EventActivityDraft, EventFieldDraft, EventLotDraft } from "@/modules/ticketing/application/use-cases/create-event/create-event.use-case";
+import type { NewEventCoupon } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
 import type { FormFieldType } from "@/modules/ticketing/domain/registrations/services/registration-form.domain-service";
 import { isJsonRecord, readBoolean, readDate, readInteger, readOptionalText, readStringArray, readText } from "@/server/api/request-data.util";
 
@@ -108,6 +109,8 @@ function mapLots(value: unknown): EventLotDraft[] | null {
     const startAt = readDate({ value: item.startAt });
     const endAt = readDate({ value: item.endAt });
     if (!startAt || !endAt) return null;
+    const coupons = mapCoupons(item.coupons);
+    if (coupons === null) return null;
     lots.push({
       id: readOptionalText({ value: item.id }) ?? undefined,
       name: readText({ value: item.name }),
@@ -117,9 +120,39 @@ function mapLots(value: unknown): EventLotDraft[] | null {
       endAt,
       active: readBoolean({ value: item.active, fallback: true }),
       sortOrder: readInteger({ value: item.sortOrder, fallback: lots.length }),
+      coupons,
     });
   }
   return lots;
+}
+
+function mapCoupons(value: unknown): NewEventCoupon[] | null {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) return null;
+  const coupons: NewEventCoupon[] = [];
+  for (const item of value) {
+    if (!isJsonRecord(item)) return null;
+    const startAt = readDate({ value: item.startAt });
+    const endAt = readDate({ value: item.endAt });
+    const type = item.type === "percentual" || item.type === "valor_fixo" ? item.type : null;
+    if (!startAt || !endAt || !type) return null;
+    coupons.push({
+      id: readOptionalText({ value: item.id }) ?? undefined,
+      code: readText({ value: item.code }).trim().toUpperCase(),
+      type,
+      discountValue: readInteger({ value: item.discountValue, fallback: 0 }),
+      maxUses:
+        item.maxUses !== undefined && item.maxUses !== null && item.maxUses !== ""
+          ? readInteger({ value: item.maxUses, fallback: 0 })
+          : null,
+      startAt,
+      endAt,
+      active: readBoolean({ value: item.active, fallback: true }),
+      allowedEmails: readStringArray({ value: item.allowedEmails }),
+      allowedCpfs: readStringArray({ value: item.allowedCpfs }),
+    });
+  }
+  return coupons;
 }
 
 function mapFields(value: unknown): EventFieldDraft[] | null {

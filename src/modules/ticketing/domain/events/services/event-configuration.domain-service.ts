@@ -2,12 +2,25 @@ import { DomainService } from "@/@core/domain/domain-service.base";
 import { Result } from "@/@core/domain/result";
 import type { FormFieldType } from "@/modules/ticketing/domain/registrations/services/registration-form.domain-service";
 
+export type EventConfigurationCoupon = {
+  code: string;
+  type: "percentual" | "valor_fixo";
+  discountValue: number;
+  maxUses?: number | null;
+  startAt: Date;
+  endAt: Date;
+  active: boolean;
+  allowedEmails: string[];
+  allowedCpfs: string[];
+};
+
 export type EventConfigurationLot = {
   name: string;
   priceCents: number;
   maxQuantity: number;
   startAt: Date;
   endAt: Date;
+  coupons?: EventConfigurationCoupon[];
 };
 export type EventConfigurationField = {
   label: string;
@@ -96,6 +109,7 @@ function validateLots(params: ValidateLotsParams): string | null {
     return "Inclua ao menos um lote para um evento pago.";
   if (params.chargeType === "gratuito" && params.lots.length > 0)
     return "Eventos gratuitos não podem ter lotes de ingressos pagos.";
+  const seenCodes = new Set<string>();
   for (const lot of params.lots) {
     if (!lot.name.trim() || lot.name.length > 100)
       return "Cada lote precisa de um nome com até 100 caracteres.";
@@ -115,6 +129,64 @@ function validateLots(params: ValidateLotsParams): string | null {
       lot.startAt >= lot.endAt
     )
       return "O período de cada lote deve estar dentro do período de inscrições.";
+
+    if (lot.coupons && lot.coupons.length > 0) {
+      for (const coupon of lot.coupons) {
+        if (!coupon.code || typeof coupon.code !== "string") {
+          return "Código do cupom é obrigatório.";
+        }
+        const normalizedCode = coupon.code.trim().toUpperCase();
+        if (
+          normalizedCode.length < 2 ||
+          normalizedCode.length > 40 ||
+          !/^[A-Z0-9]+$/.test(normalizedCode)
+        ) {
+          return `Código de cupom inválido "${coupon.code}": use apenas letras e números (2 a 40 caracteres).`;
+        }
+        if (seenCodes.has(normalizedCode)) {
+          return `O código de cupom "${normalizedCode}" está duplicado no evento.`;
+        }
+        seenCodes.add(normalizedCode);
+
+        if (!isValidDate(coupon.startAt) || !isValidDate(coupon.endAt)) {
+          return `Datas de validade inválidas para o cupom "${normalizedCode}".`;
+        }
+        if (coupon.endAt.getTime() <= coupon.startAt.getTime()) {
+          return `A data de expiração do cupom "${normalizedCode}" deve ser posterior à data de início.`;
+        }
+        if (
+          coupon.startAt.getTime() < lot.startAt.getTime() ||
+          coupon.endAt.getTime() > lot.endAt.getTime()
+        ) {
+          return `O período do cupom "${normalizedCode}" deve estar estritamente dentro do período de vendas do lote.`;
+        }
+        if (coupon.type === "percentual") {
+          if (
+            !Number.isInteger(coupon.discountValue) ||
+            coupon.discountValue < 1 ||
+            coupon.discountValue > 100
+          ) {
+            return `O percentual do cupom "${normalizedCode}" deve ser um número inteiro entre 1% e 100%.`;
+          }
+        } else if (coupon.type === "valor_fixo") {
+          if (!Number.isSafeInteger(coupon.discountValue) || coupon.discountValue <= 0) {
+            return `O valor de desconto do cupom "${normalizedCode}" deve ser maior que zero.`;
+          }
+          if (coupon.discountValue > lot.priceCents) {
+            return `O valor de desconto do cupom "${normalizedCode}" (R$ ${(coupon.discountValue / 100).toFixed(2)}) não pode exceder o valor do lote (R$ ${(lot.priceCents / 100).toFixed(2)}).`;
+          }
+        } else {
+          return `Tipo de desconto inválido para o cupom "${normalizedCode}".`;
+        }
+        if (
+          coupon.maxUses !== undefined &&
+          coupon.maxUses !== null &&
+          (!Number.isInteger(coupon.maxUses) || coupon.maxUses <= 0)
+        ) {
+          return `A quantidade máxima de usos do cupom "${normalizedCode}" deve ser um número positivo.`;
+        }
+      }
+    }
   }
   return null;
 }

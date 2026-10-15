@@ -27,6 +27,7 @@ import {
   QrCode,
   RefreshCw,
   ShieldCheck,
+  Tag,
   TicketCheck,
   UserCheck,
 } from "lucide-react";
@@ -35,6 +36,7 @@ import { participantApi } from "@/client/services/participant-api.service";
 import {
   ticketingApi,
   type PublicRegistrationResult,
+  type ValidateCouponClientResult,
 } from "@/client/services/ticketing-api.service";
 import { useParticipantAuth } from "@/components/participant-auth-provider";
 import {
@@ -98,7 +100,11 @@ export function PublicRegistrationConfirmationPage({
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [files, setFiles] = useState<Record<string, File>>({});
   const [lotId, setLotId] = useState("");
-  const [couponCode] = useState("");
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] =
+    useState<ValidateCouponClientResult | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
   const [termsConsent, setTermsConsent] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
 
@@ -439,6 +445,34 @@ export function PublicRegistrationConfirmationPage({
     setFieldErrors((current) => ({ ...current, [fieldId]: "" }));
   }
 
+  async function handleApplyCoupon(): Promise<void> {
+    if (!couponInput.trim() || !lotId || !event) return;
+    setValidatingCoupon(true);
+    setCouponError(null);
+    try {
+      const result = await ticketingApi.validateCoupon({
+        slug: event.props.slug,
+        lotId,
+        code: couponInput.trim().toUpperCase(),
+        email: authParticipant?.email ?? null,
+        cpf: authParticipant?.cpf ?? null,
+      });
+      setAppliedCoupon(result);
+    } catch {
+      // Regra 9: Não expor motivo real, mensagem genérica fixa
+      setAppliedCoupon(null);
+      setCouponError("Cupom não disponível.");
+    } finally {
+      setValidatingCoupon(false);
+    }
+  }
+
+  function handleRemoveCoupon(): void {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    setCouponError(null);
+  }
+
   async function handleConfirmRegistration(
     formEvent: FormEvent<HTMLFormElement>,
   ): Promise<void> {
@@ -528,7 +562,9 @@ export function PublicRegistrationConfirmationPage({
           },
           answers: formResult.isSuccess ? formResult.value.answers : preparedAnswers,
           lotId: requiresLot ? lotId : null,
-          couponCode: couponCode.trim() || null,
+          couponCode: appliedCoupon
+            ? appliedCoupon.code
+            : couponInput.trim().toUpperCase() || null,
           files: Object.entries(files).map(([fieldId, file]) => ({
             fieldId,
             file,
@@ -632,6 +668,16 @@ export function PublicRegistrationConfirmationPage({
         } catch {
           // Mantém mensagem padrão de erro
         }
+      }
+      if (
+        caught instanceof ApiError &&
+        (caught.code === "COUPON_UNAVAILABLE" ||
+          caught.message.toLowerCase().includes("cupom"))
+      ) {
+        setGeneralError("Cupom não disponível.");
+        setCouponError("Cupom não disponível.");
+        setAppliedCoupon(null);
+        return;
       }
       const apiErrors = readApiFieldErrors(caught);
       if (apiErrors) setFieldErrors(apiErrors);
@@ -1239,7 +1285,9 @@ export function PublicRegistrationConfirmationPage({
                   {event.props.chargeType === "gratuito"
                     ? "Gratuito"
                     : selectedLot
-                      ? formatCurrency({ cents: selectedLot.priceCents })
+                      ? appliedCoupon
+                        ? formatCurrency({ cents: appliedCoupon.finalCents })
+                        : formatCurrency({ cents: selectedLot.priceCents })
                       : "A definir no lote"}
                 </p>
               </div>
@@ -1404,7 +1452,14 @@ export function PublicRegistrationConfirmationPage({
                 <select
                   id="registration-lot"
                   value={lotId}
-                  onChange={(e) => setLotId(e.target.value)}
+                  onChange={(e) => {
+                    const newLotId = e.target.value;
+                    setLotId(newLotId);
+                    if (appliedCoupon) {
+                      setAppliedCoupon(null);
+                      setCouponError(null);
+                    }
+                  }}
                   className={selectCls}
                 >
                   <option value="">Selecione um lote</option>
@@ -1415,6 +1470,117 @@ export function PublicRegistrationConfirmationPage({
                   ))}
                 </select>
               </Field>
+
+              {/* Seção do Cupom de Desconto */}
+              <div className="rounded-app-md border border-app-border/80 bg-app-surface/60 p-4 space-y-3">
+                <div>
+                  <label
+                    htmlFor="coupon-code-input"
+                    className="block text-xs font-semibold text-app-foreground"
+                  >
+                    Possui um cupom de desconto?
+                  </label>
+                  <p className="mt-0.5 text-xs text-app-muted-foreground">
+                    Informe o código promocional para obter desconto no ingresso.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      id="coupon-code-input"
+                      type="text"
+                      value={couponInput}
+                      disabled={validatingCoupon || Boolean(appliedCoupon)}
+                      onChange={(e) => {
+                        setCouponInput(
+                          e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                        );
+                        setCouponError(null);
+                      }}
+                      placeholder="Código do cupom"
+                      className={`${CUSTOM_INPUT_CLASS} uppercase font-mono`}
+                    />
+                  </div>
+                  {appliedCoupon ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleRemoveCoupon}
+                      className="shrink-0"
+                    >
+                      Remover cupom
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={validatingCoupon || !couponInput.trim() || !lotId}
+                      onClick={() => void handleApplyCoupon()}
+                      className="shrink-0"
+                    >
+                      {validatingCoupon ? (
+                        <>
+                          <LoaderCircle
+                            className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                            aria-hidden="true"
+                          />
+                          Validando…
+                        </>
+                      ) : (
+                        "Aplicar cupom"
+                      )}
+                    </Button>
+                  )}
+                </div>
+
+                {couponError ? (
+                  <p role="alert" className="text-xs font-medium text-app-danger">
+                    {couponError}
+                  </p>
+                ) : null}
+
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between rounded-app-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+                    <div className="flex items-center gap-1.5">
+                      <Tag className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span>
+                        Cupom <strong>{appliedCoupon.code}</strong> aplicado! Desconto de{" "}
+                        {appliedCoupon.type === "percentual"
+                          ? `${appliedCoupon.discountValue}% (${formatCurrency({ cents: appliedCoupon.discountCents })})`
+                          : formatCurrency({ cents: appliedCoupon.discountCents })}.
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {selectedLot ? (
+                <div className="rounded-app-md border border-app-border bg-app-surface-elevated/40 p-4 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-app-muted-foreground">
+                    <span>Valor original ({selectedLot.name}):</span>
+                    <span>{formatCurrency({ cents: selectedLot.priceCents })}</span>
+                  </div>
+                  {appliedCoupon ? (
+                    <div className="flex justify-between font-medium text-emerald-600 dark:text-emerald-400">
+                      <span>Desconto ({appliedCoupon.code}):</span>
+                      <span>
+                        - {formatCurrency({ cents: appliedCoupon.discountCents })}
+                      </span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between border-t border-app-border pt-2 text-sm font-bold text-app-foreground">
+                    <span>Total a pagar:</span>
+                    <span className="text-base text-app-primary">
+                      {formatCurrency({
+                        cents: appliedCoupon
+                          ? appliedCoupon.finalCents
+                          : selectedLot.priceCents,
+                      })}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
 
               <InlineAlert tone="info">
                 <span className="flex items-center gap-2">

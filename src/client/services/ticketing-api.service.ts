@@ -1,6 +1,7 @@
 import type {
   EventReadModel,
   ListPublicEventsParams,
+  NewEventCoupon,
 } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
 import type {
   ParticipantInput,
@@ -52,6 +53,21 @@ export type PublicRegistrationResult = {
   pixBankCnpj?: string | null;
   pixBankAccountHolder?: string | null;
 };
+export type ValidateCouponClientRequest = {
+  lotId: string;
+  code: string;
+  email?: string | null;
+  cpf?: string | null;
+};
+export type ValidateCouponClientResult = {
+  couponId: string;
+  code: string;
+  type: "percentual" | "valor_fixo";
+  discountValue: number;
+  originalCents: number;
+  discountCents: number;
+  finalCents: number;
+};
 export type ManagedEventListParams = { query?: string };
 export type AdminRegistrationQuery = {
   eventId?: string;
@@ -81,7 +97,10 @@ export type CreateEventRequest = Omit<
   "status" | "createdByGlobalUserId" | "deletedAt"
 > & {
   lots: Array<
-    Omit<EventReadModel["lots"][number], "id" | "soldCount"> & { id?: string }
+    Omit<EventReadModel["lots"][number], "id" | "soldCount" | "coupons"> & {
+      id?: string;
+      coupons?: NewEventCoupon[];
+    }
   >;
   fields: Array<Omit<EventReadModel["formFields"][number], "id"> & { id?: string }>;
   activities: Array<
@@ -144,6 +163,26 @@ export class TicketingApiService extends ApiService {
         path: `/api/v1/events/${encodeURIComponent(params.slug)}/registrations`,
         method: "POST",
         body,
+      })
+    ).data;
+  }
+  async validateCoupon(params: {
+    slug: string;
+    lotId: string;
+    code: string;
+    email?: string | null;
+    cpf?: string | null;
+  }): Promise<ValidateCouponClientResult> {
+    return (
+      await this.httpClient.request<ValidateCouponClientResult>({
+        path: `/api/v1/events/${encodeURIComponent(params.slug)}/validate-coupon`,
+        method: "POST",
+        body: {
+          lotId: params.lotId,
+          code: params.code,
+          email: params.email,
+          cpf: params.cpf,
+        },
       })
     ).data;
   }

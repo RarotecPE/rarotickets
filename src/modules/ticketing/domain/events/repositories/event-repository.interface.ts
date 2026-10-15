@@ -1,6 +1,21 @@
 import type { Event, EventProps } from "../entities/event.aggregate";
 import type { FormFieldType } from "../../registrations/services/registration-form.domain-service";
 
+export type EventCouponReadModel = {
+  id: string;
+  lotId: string;
+  code: string;
+  type: "percentual" | "valor_fixo";
+  discountValue: number;
+  maxUses: number | null;
+  usedCount: number;
+  startAt: Date;
+  endAt: Date;
+  active: boolean;
+  allowedEmails: string[];
+  allowedCpfs: string[];
+};
+
 export type EventLotReadModel = {
   id: string;
   name: string;
@@ -11,6 +26,7 @@ export type EventLotReadModel = {
   endAt: Date;
   active: boolean;
   sortOrder: number;
+  coupons?: EventCouponReadModel[];
 };
 export type EventFormFieldReadModel = {
   id: string;
@@ -48,7 +64,29 @@ export type ListManagedEventsParams = { userId: string; canViewAll: boolean; que
 export type FindEventByIdParams = { id: string };
 export type GetManagedEventParams = { id: string; userId: string; canViewAll: boolean };
 export type CreateEventRecordParams = { event: Event; lots: NewEventLot[]; fields: NewEventField[]; activities: NewEventActivity[] };
-export type NewEventLot = { id: string; name: string; priceCents: number; maxQuantity: number; startAt: Date; endAt: Date; active: boolean; sortOrder: number };
+export type NewEventCoupon = {
+  id?: string;
+  code: string;
+  type: "percentual" | "valor_fixo";
+  discountValue: number;
+  maxUses?: number | null;
+  startAt: Date;
+  endAt: Date;
+  active: boolean;
+  allowedEmails: string[];
+  allowedCpfs: string[];
+};
+export type NewEventLot = {
+  id: string;
+  name: string;
+  priceCents: number;
+  maxQuantity: number;
+  startAt: Date;
+  endAt: Date;
+  active: boolean;
+  sortOrder: number;
+  coupons?: NewEventCoupon[];
+};
 export type NewEventField = { id: string; label: string; description: string | null; type: FormFieldType; required: boolean; options: string[]; displayOrder: number };
 export type NewEventActivity = { id: string; title: string; description: string; speakerName: string; speakerBio: string | null; room: string | null; startAt: Date; endAt: Date };
 export type UpdateEventDetailsParams = {

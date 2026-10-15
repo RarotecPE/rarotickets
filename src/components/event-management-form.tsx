@@ -11,6 +11,7 @@ import {
   Plus,
   QrCode,
   Save,
+  Tag,
   Trash2,
 } from "lucide-react";
 import { ticketingApi } from "@/client/services/ticketing-api.service";
@@ -31,6 +32,7 @@ import {
 import { BannerImageDomainService } from "@/modules/ticketing/domain/events/services/banner-image.domain-service";
 import { EventConfigurationDomainService } from "@/modules/ticketing/domain/events/services/event-configuration.domain-service";
 import { Email } from "@/modules/ticketing/domain/participants/value-objects/email.vo";
+import { Cpf } from "@/modules/ticketing/domain/participants/value-objects/cpf.vo";
 import { EventSlug } from "@/modules/ticketing/domain/events/value-objects/event-slug.vo";
 import { EventTitle } from "@/modules/ticketing/domain/events/value-objects/event-title.vo";
 import type { FormFieldType } from "@/modules/ticketing/domain/registrations/services/registration-form.domain-service";
@@ -75,13 +77,28 @@ type EventDraft = {
   fields: FieldDraft[];
   activities: ActivityDraft[];
 };
+type CouponDraft = {
+  rowId: string;
+  id?: string;
+  code: string;
+  type: "percentual" | "valor_fixo";
+  discountValue: string;
+  maxUses: string;
+  startAt: string;
+  endAt: string;
+  active: boolean;
+  allowedEmailsText: string;
+  allowedCpfsText: string;
+};
 type LotDraft = {
   rowId: string;
+  id?: string;
   name: string;
   price: string;
   quantity: string;
   startAt: string;
   endAt: string;
+  coupons?: CouponDraft[];
 };
 type FieldDraft = {
   rowId: string;
@@ -109,6 +126,12 @@ type LotFieldChangeParams = {
   rowId: string;
   field: keyof LotDraft;
   value: string;
+};
+type CouponFieldChangeParams = {
+  lotRowId: string;
+  couponRowId: string;
+  field: keyof CouponDraft;
+  value: any;
 };
 type CustomFieldChangeParams = {
   rowId: string;
@@ -383,6 +406,25 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
             quantity: String(lot.maxQuantity),
             startAt: toDatetimeLocalValue(lot.startAt),
             endAt: toDatetimeLocalValue(lot.endAt),
+            coupons: (lot.coupons ?? []).map((c) => ({
+              rowId: c.id || createRowId(),
+              id: c.id,
+              code: c.code,
+              type: c.type,
+              discountValue:
+                c.type === "percentual"
+                  ? String(c.discountValue)
+                  : (c.discountValue / 100).toFixed(2),
+              maxUses:
+                c.maxUses !== null && c.maxUses !== undefined
+                  ? String(c.maxUses)
+                  : "",
+              startAt: toDatetimeLocalValue(c.startAt),
+              endAt: toDatetimeLocalValue(c.endAt),
+              active: c.active,
+              allowedEmailsText: (c.allowedEmails ?? []).join("\n"),
+              allowedCpfsText: (c.allowedCpfs ?? []).join("\n"),
+            })),
           })),
           fields: loadedFields,
           activities: data.activities.map((act) => ({
@@ -481,8 +523,71 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
           quantity: "50",
           startAt: current.registrationStartAt,
           endAt: current.registrationEndAt,
+          coupons: [],
         },
       ],
+    }));
+  }
+
+  function addLotCoupon(lotRowId: string): void {
+    setDraft((current) => ({
+      ...current,
+      lots: current.lots.map((lot) => {
+        if (lot.rowId !== lotRowId) return lot;
+        return {
+          ...lot,
+          coupons: [
+            ...(lot.coupons ?? []),
+            {
+              rowId: createRowId(),
+              code: "",
+              type: "percentual",
+              discountValue: "10",
+              maxUses: "",
+              startAt: lot.startAt,
+              endAt: lot.endAt,
+              active: true,
+              allowedEmailsText: "",
+              allowedCpfsText: "",
+            },
+          ],
+        };
+      }),
+    }));
+  }
+
+  function updateLotCoupon(params: CouponFieldChangeParams): void {
+    setDraft((current) => ({
+      ...current,
+      lots: current.lots.map((lot) => {
+        if (lot.rowId !== params.lotRowId) return lot;
+        return {
+          ...lot,
+          coupons: (lot.coupons ?? []).map((c) =>
+            c.rowId === params.couponRowId
+              ? { ...c, [params.field]: params.value }
+              : c,
+          ),
+        };
+      }),
+    }));
+  }
+
+  function removeLotCoupon(params: {
+    lotRowId: string;
+    couponRowId: string;
+  }): void {
+    setDraft((current) => ({
+      ...current,
+      lots: current.lots.map((lot) => {
+        if (lot.rowId !== params.lotRowId) return lot;
+        return {
+          ...lot,
+          coupons: (lot.coupons ?? []).filter(
+            (c) => c.rowId !== params.couponRowId,
+          ),
+        };
+      }),
     }));
   }
 
@@ -700,12 +805,57 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
   for (const [key, msg] of Object.entries(errors)) {
     if (!msg || typeof msg !== "string" || !msg.trim()) continue;
     const meta = PENDENCY_FIELD_METADATA[key];
-    pendencies.push({
-      key,
-      label: meta?.label ?? key,
-      message: msg,
-      targetId: meta?.targetId,
-    });
+    if (meta) {
+      pendencies.push({
+        key,
+        label: meta.label,
+        message: msg,
+        targetId: meta.targetId,
+      });
+    } else if (key.startsWith("lots.")) {
+      const parts = key.split(".");
+      const lotIndex = Number(parts[1]) + 1;
+      if (parts[2] === "coupons") {
+        const couponIndex = Number(parts[3]) + 1;
+        const field = parts[4];
+        const fieldLabels: Record<string, string> = {
+          code: "Código",
+          discountValue: "Valor do desconto",
+          startAt: "Início da validade",
+          endAt: "Término da validade",
+          maxUses: "Limite de usos",
+          allowedEmailsText: "E-mails permitidos",
+          allowedCpfsText: "CPFs permitidos",
+        };
+        pendencies.push({
+          key,
+          label: `Lote ${lotIndex} > Cupom ${couponIndex} (${fieldLabels[field] || field})`,
+          message: msg,
+          targetId: `lot-${Number(parts[1])}-coupon-${Number(parts[3])}-${field}`,
+        });
+      } else {
+        const field = parts[2];
+        const fieldLabels: Record<string, string> = {
+          name: "Nome do lote",
+          price: "Valor do lote",
+          quantity: "Quantidade do lote",
+          startAt: "Início do lote",
+          endAt: "Término do lote",
+        };
+        pendencies.push({
+          key,
+          label: `Lote ${lotIndex} (${fieldLabels[field] || field})`,
+          message: msg,
+          targetId: `lot-${Number(parts[1])}-${field}`,
+        });
+      }
+    } else {
+      pendencies.push({
+        key,
+        label: key,
+        message: msg,
+      });
+    }
   }
 
   if (bannerError) {
@@ -804,6 +954,9 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
           onAdd={addLot}
           onChange={updateLot}
           onRemove={(rowId) => removeRow({ kind: "lot", rowId })}
+          onAddCoupon={addLotCoupon}
+          onChangeCoupon={updateLotCoupon}
+          onRemoveCoupon={removeLotCoupon}
         />
         <CustomFieldsSection
           fields={draft.fields}
@@ -1628,12 +1781,18 @@ function TicketLotsSection({
   onAdd,
   onChange,
   onRemove,
+  onAddCoupon,
+  onChangeCoupon,
+  onRemoveCoupon,
 }: {
   draft: EventDraft;
   errors: Record<string, string>;
   onAdd: () => void;
   onChange: (params: LotFieldChangeParams) => void;
   onRemove: (rowId: string) => void;
+  onAddCoupon: (lotRowId: string) => void;
+  onChangeCoupon: (params: CouponFieldChangeParams) => void;
+  onRemoveCoupon: (params: { lotRowId: string; couponRowId: string }) => void;
 }) {
   if (draft.chargeType !== "pago") return null;
   return (
@@ -1653,10 +1812,10 @@ function TicketLotsSection({
           draft.lots.map((lot, index) => (
             <div
               key={lot.rowId}
-              className="rounded-app-md border border-app-border p-3"
+              className="rounded-app-md border border-app-border p-3 sm:p-4 space-y-4"
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-app-muted-foreground">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-app-muted-foreground uppercase tracking-wider">
                   Lote {index + 1}
                 </p>
                 <Button
@@ -1666,17 +1825,17 @@ function TicketLotsSection({
                   aria-label={`Remover lote ${index + 1}`}
                   onClick={() => onRemove(lot.rowId)}
                 >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  <Trash2 className="h-4 w-4 text-app-danger" aria-hidden="true" />
                 </Button>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field
                   label="Nome *"
-                  htmlFor={`lot-${lot.rowId}-name`}
+                  htmlFor={`lot-${index}-name`}
                   error={errors[`lots.${index}.name`]}
                 >
                   <input
-                    id={`lot-${lot.rowId}-name`}
+                    id={`lot-${index}-name`}
                     value={lot.name}
                     onChange={(event) =>
                       onChange({
@@ -1688,9 +1847,13 @@ function TicketLotsSection({
                     className={inputClass}
                   />
                 </Field>
-                <Field label="Valor (R$) *" htmlFor={`lot-${lot.rowId}-price`}>
+                <Field
+                  label="Valor (R$) *"
+                  htmlFor={`lot-${index}-price`}
+                  error={errors[`lots.${index}.price`]}
+                >
                   <input
-                    id={`lot-${lot.rowId}-price`}
+                    id={`lot-${index}-price`}
                     type="number"
                     min="0.01"
                     step="0.01"
@@ -1708,10 +1871,11 @@ function TicketLotsSection({
                 </Field>
                 <Field
                   label="Quantidade máxima *"
-                  htmlFor={`lot-${lot.rowId}-quantity`}
+                  htmlFor={`lot-${index}-quantity`}
+                  error={errors[`lots.${index}.quantity`]}
                 >
                   <input
-                    id={`lot-${lot.rowId}-quantity`}
+                    id={`lot-${index}-quantity`}
                     type="number"
                     min="1"
                     step="1"
@@ -1729,10 +1893,11 @@ function TicketLotsSection({
                 <div className="hidden sm:block" />
                 <Field
                   label="Início do lote *"
-                  htmlFor={`lot-${lot.rowId}-start`}
+                  htmlFor={`lot-${index}-startAt`}
+                  error={errors[`lots.${index}.startAt`]}
                 >
                   <input
-                    id={`lot-${lot.rowId}-start`}
+                    id={`lot-${index}-startAt`}
                     type="datetime-local"
                     value={lot.startAt}
                     onChange={(event) =>
@@ -1747,10 +1912,11 @@ function TicketLotsSection({
                 </Field>
                 <Field
                   label="Término do lote *"
-                  htmlFor={`lot-${lot.rowId}-end`}
+                  htmlFor={`lot-${index}-endAt`}
+                  error={errors[`lots.${index}.endAt`]}
                 >
                   <input
-                    id={`lot-${lot.rowId}-end`}
+                    id={`lot-${index}-endAt`}
                     type="datetime-local"
                     value={lot.endAt}
                     onChange={(event) =>
@@ -1763,6 +1929,264 @@ function TicketLotsSection({
                     className={inputClass}
                   />
                 </Field>
+              </div>
+
+              {/* Sub-seção de Cupons do Lote */}
+              <div className="border-t border-app-border/60 pt-4">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-app-foreground">
+                    <Tag className="h-3.5 w-3.5 text-app-primary" aria-hidden="true" />
+                    <span>Cupons de desconto do lote ({lot.coupons?.length ?? 0})</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    compact
+                    onClick={() => onAddCoupon(lot.rowId)}
+                  >
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                    Adicionar cupom
+                  </Button>
+                </div>
+
+                {lot.coupons && lot.coupons.length > 0 ? (
+                  <div className="space-y-3">
+                    {lot.coupons.map((coupon, cIdx) => (
+                      <div
+                        key={coupon.rowId}
+                        className="rounded-app-md border border-app-border/80 bg-app-surface/50 p-3 sm:p-4 text-xs space-y-3"
+                      >
+                        <div className="flex items-center justify-between gap-2 border-b border-app-border/40 pb-2">
+                          <span className="font-semibold text-app-foreground">
+                            Cupom #{cIdx + 1}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <label className="flex items-center gap-1.5 text-app-muted-foreground cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={coupon.active}
+                                onChange={(e) =>
+                                  onChangeCoupon({
+                                    lotRowId: lot.rowId,
+                                    couponRowId: coupon.rowId,
+                                    field: "active",
+                                    value: e.target.checked,
+                                  })
+                                }
+                                className="rounded border-app-border text-app-primary focus:ring-app-primary"
+                              />
+                              <span>Ativo</span>
+                            </label>
+                            <Button
+                              type="button"
+                              compact
+                              variant="ghost"
+                              aria-label={`Remover cupom ${cIdx + 1}`}
+                              onClick={() =>
+                                onRemoveCoupon({
+                                  lotRowId: lot.rowId,
+                                  couponRowId: coupon.rowId,
+                                })
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-app-danger" aria-hidden="true" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          <Field
+                            label="Código do cupom *"
+                            htmlFor={`lot-${index}-coupon-${cIdx}-code`}
+                            error={errors[`lots.${index}.coupons.${cIdx}.code`]}
+                          >
+                            <input
+                              id={`lot-${index}-coupon-${cIdx}-code`}
+                              value={coupon.code}
+                              onChange={(e) =>
+                                onChangeCoupon({
+                                  lotRowId: lot.rowId,
+                                  couponRowId: coupon.rowId,
+                                  field: "code",
+                                  value: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                                })
+                              }
+                              className={`${inputClass} uppercase font-mono`}
+                              placeholder="EX: PROMO10"
+                            />
+                          </Field>
+
+                          <Field
+                            label="Tipo de desconto *"
+                            htmlFor={`lot-${index}-coupon-${cIdx}-type`}
+                          >
+                            <select
+                              id={`lot-${index}-coupon-${cIdx}-type`}
+                              value={coupon.type}
+                              onChange={(e) =>
+                                onChangeCoupon({
+                                  lotRowId: lot.rowId,
+                                  couponRowId: coupon.rowId,
+                                  field: "type",
+                                  value: e.target.value as "percentual" | "valor_fixo",
+                                })
+                              }
+                              className={selectCls}
+                            >
+                              <option value="percentual">Percentual (%)</option>
+                              <option value="valor_fixo">Valor fixo (R$)</option>
+                            </select>
+                          </Field>
+
+                          <Field
+                            label={
+                              coupon.type === "percentual"
+                                ? "Desconto (%) *"
+                                : "Desconto (R$) *"
+                            }
+                            htmlFor={`lot-${index}-coupon-${cIdx}-discountValue`}
+                            error={errors[`lots.${index}.coupons.${cIdx}.discountValue`]}
+                          >
+                            <input
+                              id={`lot-${index}-coupon-${cIdx}-discountValue`}
+                              type="number"
+                              min="0.01"
+                              step={coupon.type === "percentual" ? "1" : "0.01"}
+                              max={coupon.type === "percentual" ? "100" : lot.price || undefined}
+                              value={coupon.discountValue}
+                              onChange={(e) =>
+                                onChangeCoupon({
+                                  lotRowId: lot.rowId,
+                                  couponRowId: coupon.rowId,
+                                  field: "discountValue",
+                                  value: e.target.value,
+                                })
+                              }
+                              className={inputClass}
+                              placeholder={coupon.type === "percentual" ? "10" : "0,00"}
+                            />
+                          </Field>
+
+                          <Field
+                            label="Limite de usos"
+                            htmlFor={`lot-${index}-coupon-${cIdx}-maxUses`}
+                            error={errors[`lots.${index}.coupons.${cIdx}.maxUses`]}
+                          >
+                            <input
+                              id={`lot-${index}-coupon-${cIdx}-maxUses`}
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={coupon.maxUses}
+                              onChange={(e) =>
+                                onChangeCoupon({
+                                  lotRowId: lot.rowId,
+                                  couponRowId: coupon.rowId,
+                                  field: "maxUses",
+                                  value: e.target.value,
+                                })
+                              }
+                              className={inputClass}
+                              placeholder="Ilimitado se vazio"
+                            />
+                          </Field>
+
+                          <Field
+                            label="Início da validade *"
+                            htmlFor={`lot-${index}-coupon-${cIdx}-startAt`}
+                            error={errors[`lots.${index}.coupons.${cIdx}.startAt`]}
+                          >
+                            <input
+                              id={`lot-${index}-coupon-${cIdx}-startAt`}
+                              type="datetime-local"
+                              value={coupon.startAt}
+                              onChange={(e) =>
+                                onChangeCoupon({
+                                  lotRowId: lot.rowId,
+                                  couponRowId: coupon.rowId,
+                                  field: "startAt",
+                                  value: e.target.value,
+                                })
+                              }
+                              className={inputClass}
+                            />
+                          </Field>
+
+                          <Field
+                            label="Término da validade *"
+                            htmlFor={`lot-${index}-coupon-${cIdx}-endAt`}
+                            error={errors[`lots.${index}.coupons.${cIdx}.endAt`]}
+                          >
+                            <input
+                              id={`lot-${index}-coupon-${cIdx}-endAt`}
+                              type="datetime-local"
+                              value={coupon.endAt}
+                              onChange={(e) =>
+                                onChangeCoupon({
+                                  lotRowId: lot.rowId,
+                                  couponRowId: coupon.rowId,
+                                  field: "endAt",
+                                  value: e.target.value,
+                                })
+                              }
+                              className={inputClass}
+                            />
+                          </Field>
+
+                          <div className="sm:col-span-3 grid grid-cols-1 gap-3 sm:grid-cols-2 pt-1">
+                            <Field
+                              label="Vincular a E-mails específicos (opcional)"
+                              htmlFor={`lot-${index}-coupon-${cIdx}-allowedEmailsText`}
+                              error={errors[`lots.${index}.coupons.${cIdx}.allowedEmailsText`]}
+                            >
+                              <textarea
+                                id={`lot-${index}-coupon-${cIdx}-allowedEmailsText`}
+                                rows={2}
+                                value={coupon.allowedEmailsText}
+                                onChange={(e) =>
+                                  onChangeCoupon({
+                                    lotRowId: lot.rowId,
+                                    couponRowId: coupon.rowId,
+                                    field: "allowedEmailsText",
+                                    value: e.target.value,
+                                  })
+                                }
+                                className={textAreaClass}
+                                placeholder="Deixe vazio para qualquer participante, ou informe e-mails separados por vírgula ou linha"
+                              />
+                            </Field>
+
+                            <Field
+                              label="Vincular a CPFs específicos (opcional)"
+                              htmlFor={`lot-${index}-coupon-${cIdx}-allowedCpfsText`}
+                              error={errors[`lots.${index}.coupons.${cIdx}.allowedCpfsText`]}
+                            >
+                              <textarea
+                                id={`lot-${index}-coupon-${cIdx}-allowedCpfsText`}
+                                rows={2}
+                                value={coupon.allowedCpfsText}
+                                onChange={(e) =>
+                                  onChangeCoupon({
+                                    lotRowId: lot.rowId,
+                                    couponRowId: coupon.rowId,
+                                    field: "allowedCpfsText",
+                                    value: e.target.value,
+                                  })
+                                }
+                                className={textAreaClass}
+                                placeholder="Deixe vazio para qualquer participante, ou informe CPFs separados por vírgula ou linha"
+                              />
+                            </Field>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-app-muted-foreground italic">
+                    Nenhum cupom cadastrado para este lote.
+                  </p>
+                )}
               </div>
             </div>
           ))
@@ -2293,18 +2717,162 @@ function validateEventDraft(
       errors.pixNotificationEmail = "Informe um e-mail válido para notificação.";
     }
   }
+  const seenCouponCodes = new Set<string>();
   const lots =
     draft.chargeType === "pago"
-      ? draft.lots.map((lot) => ({
-          id: lot.rowId,
-          name: lot.name.trim(),
-          priceCents: Math.round(Number(lot.price) * 100),
-          maxQuantity: Number(lot.quantity),
-          startAt: parseSilentDate(lot.startAt),
-          endAt: parseSilentDate(lot.endAt),
-          active: true,
-          sortOrder: draft.lots.indexOf(lot),
-        }))
+      ? draft.lots.map((lot, lotIndex) => {
+          const lotPriceCents = Math.round(Number(lot.price) * 100);
+          const lotStart = parseSilentDate(lot.startAt);
+          const lotEnd = parseSilentDate(lot.endAt);
+          if (!lot.name.trim()) {
+            errors[`lots.${lotIndex}.name`] = "Informe o nome do lote.";
+          }
+          if (isNaN(lotPriceCents) || lotPriceCents <= 0) {
+            errors[`lots.${lotIndex}.price`] = "Informe um valor válido para o lote.";
+          }
+          const qty = Number(lot.quantity);
+          if (!Number.isInteger(qty) || qty <= 0) {
+            errors[`lots.${lotIndex}.quantity`] = "Informe uma quantidade válida para o lote.";
+          }
+          if (!lot.startAt || isNaN(lotStart.getTime())) {
+            errors[`lots.${lotIndex}.startAt`] = "Informe o início do lote.";
+          }
+          if (!lot.endAt || isNaN(lotEnd.getTime())) {
+            errors[`lots.${lotIndex}.endAt`] = "Informe o término do lote.";
+          }
+          if (!isNaN(lotStart.getTime()) && !isNaN(lotEnd.getTime()) && lotEnd <= lotStart) {
+            errors[`lots.${lotIndex}.endAt`] = "O término do lote deve ser posterior ao início.";
+          }
+
+          const coupons = (lot.coupons ?? []).map((coupon, couponIndex) => {
+            const rawCode = coupon.code.trim().toUpperCase();
+            if (!rawCode) {
+              errors[`lots.${lotIndex}.coupons.${couponIndex}.code`] = "Informe o código do cupom.";
+            } else if (!/^[A-Z0-9]+$/.test(rawCode)) {
+              errors[`lots.${lotIndex}.coupons.${couponIndex}.code`] =
+                "O código deve conter apenas letras e números (sem espaços ou acentos).";
+            } else if (seenCouponCodes.has(rawCode)) {
+              errors[`lots.${lotIndex}.coupons.${couponIndex}.code`] =
+                `O código “${rawCode}” já está sendo utilizado em outro cupom do evento.`;
+            } else {
+              seenCouponCodes.add(rawCode);
+            }
+
+            const couponStart = coupon.startAt ? parseSilentDate(coupon.startAt) : null;
+            const couponEnd = coupon.endAt ? parseSilentDate(coupon.endAt) : null;
+            if (!coupon.startAt || !couponStart || isNaN(couponStart.getTime())) {
+              errors[`lots.${lotIndex}.coupons.${couponIndex}.startAt`] =
+                "Informe o início da validade.";
+            }
+            if (!coupon.endAt || !couponEnd || isNaN(couponEnd.getTime())) {
+              errors[`lots.${lotIndex}.coupons.${couponIndex}.endAt`] =
+                "Informe o término da validade.";
+            }
+            if (
+              couponStart &&
+              couponEnd &&
+              !isNaN(couponStart.getTime()) &&
+              !isNaN(couponEnd.getTime())
+            ) {
+              if (couponEnd <= couponStart) {
+                errors[`lots.${lotIndex}.coupons.${couponIndex}.endAt`] =
+                  "O término da validade deve ocorrer após o início.";
+              }
+              if (!isNaN(lotStart.getTime()) && couponStart < lotStart) {
+                errors[`lots.${lotIndex}.coupons.${couponIndex}.startAt`] =
+                  "O início do cupom não pode ser anterior ao início do lote.";
+              }
+              if (!isNaN(lotEnd.getTime()) && couponEnd > lotEnd) {
+                errors[`lots.${lotIndex}.coupons.${couponIndex}.endAt`] =
+                  "O término do cupom não pode ser posterior ao término do lote.";
+              }
+            }
+
+            const rawVal = Number(coupon.discountValue);
+            let discountValueNumber = 0;
+            if (!coupon.discountValue || isNaN(rawVal) || rawVal <= 0) {
+              errors[`lots.${lotIndex}.coupons.${couponIndex}.discountValue`] =
+                "Informe um valor de desconto válido maior que zero.";
+            } else if (coupon.type === "percentual") {
+              if (rawVal > 100) {
+                errors[`lots.${lotIndex}.coupons.${couponIndex}.discountValue`] =
+                  "O desconto percentual não pode exceder 100%.";
+              }
+              discountValueNumber = Math.round(rawVal);
+            } else {
+              const valCents = Math.round(rawVal * 100);
+              if (lotPriceCents > 0 && valCents > lotPriceCents) {
+                errors[`lots.${lotIndex}.coupons.${couponIndex}.discountValue`] =
+                  "O desconto não pode exceder o valor total do lote.";
+              }
+              discountValueNumber = valCents;
+            }
+
+            let maxUsesNumber: number | null = null;
+            if (coupon.maxUses && coupon.maxUses.trim()) {
+              const uses = Number(coupon.maxUses);
+              if (!Number.isInteger(uses) || uses <= 0) {
+                errors[`lots.${lotIndex}.coupons.${couponIndex}.maxUses`] =
+                  "O limite de usos deve ser um número inteiro maior que zero.";
+              } else {
+                maxUsesNumber = uses;
+              }
+            }
+
+            const allowedEmails = coupon.allowedEmailsText
+              ? coupon.allowedEmailsText
+                  .split(/[\n,;]+/)
+                  .map((e) => e.trim().toLowerCase())
+                  .filter(Boolean)
+              : [];
+            for (const email of allowedEmails) {
+              if (Email.create(email).isFailure) {
+                errors[`lots.${lotIndex}.coupons.${couponIndex}.allowedEmailsText`] =
+                  `E-mail inválido: “${email}”.`;
+                break;
+              }
+            }
+
+            const allowedCpfs = coupon.allowedCpfsText
+              ? coupon.allowedCpfsText
+                  .split(/[\n,;]+/)
+                  .map((c) => c.replace(/\D/g, ""))
+                  .filter(Boolean)
+              : [];
+            for (const cpf of allowedCpfs) {
+              if (Cpf.create(cpf).isFailure) {
+                errors[`lots.${lotIndex}.coupons.${couponIndex}.allowedCpfsText`] =
+                  `CPF inválido: “${cpf}”. Deve conter 11 dígitos.`;
+                break;
+              }
+            }
+
+            return {
+              id: coupon.id || coupon.rowId,
+              code: rawCode,
+              type: coupon.type,
+              discountValue: discountValueNumber,
+              maxUses: maxUsesNumber,
+              startAt: couponStart ?? new Date(),
+              endAt: couponEnd ?? new Date(),
+              active: coupon.active,
+              allowedEmails,
+              allowedCpfs,
+            };
+          });
+
+          return {
+            id: lot.rowId,
+            name: lot.name.trim(),
+            priceCents: lotPriceCents,
+            maxQuantity: Number(lot.quantity),
+            startAt: lotStart,
+            endAt: lotEnd,
+            active: true,
+            sortOrder: draft.lots.indexOf(lot),
+            coupons,
+          };
+        })
       : [];
   const fields = draft.fields.map((field, index) => ({
     id: field.rowId,

@@ -31,6 +31,7 @@ import { RunMaintenanceUseCase } from "@/modules/ticketing/application/use-cases
 import { ProcessPaymentWebhookUseCase } from "@/modules/ticketing/application/use-cases/process-payment-webhook/process-payment-webhook.use-case";
 import { TransitionEventUseCase } from "@/modules/ticketing/application/use-cases/transition-event/transition-event.use-case";
 import { UpdateEventUseCase } from "@/modules/ticketing/application/use-cases/update-event/update-event.use-case";
+import { ValidateCouponUseCase } from "@/modules/ticketing/application/use-cases/validate-coupon/validate-coupon.use-case";
 import { DrizzleAuditRepository } from "@/modules/ticketing/server/infrastructure/persistence/repositories/drizzle-audit.repository.impl";
 import { DrizzleCertificateRepository } from "@/modules/ticketing/server/infrastructure/persistence/repositories/drizzle-certificate.repository.impl";
 import { DrizzleCheckInRepository } from "@/modules/ticketing/server/infrastructure/persistence/repositories/drizzle-checkin.repository.impl";
@@ -67,6 +68,7 @@ export type TicketingContainer = {
   uploadEventPixQr: UploadEventPixQrUseCase;
   updateEvent: UpdateEventUseCase;
   transitionEvent: TransitionEventUseCase;
+  validateCoupon: ValidateCouponUseCase;
   createPublicRegistration: CreatePublicRegistrationUseCase;
   getPrivateRegistrationFile: GetPrivateRegistrationFileUseCase;
   getPublicFile: GetPublicFileUseCase;
@@ -216,6 +218,10 @@ export function createTicketingContainer(): TicketingContainer {
       auditRepository,
       promoteWaitlist,
       processOutbox,
+    }),
+    validateCoupon: new ValidateCouponUseCase({
+      eventRepository,
+      registrationRepository,
     }),
     createPublicRegistration: new CreatePublicRegistrationUseCase({
       eventRepository,

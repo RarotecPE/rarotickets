@@ -16,7 +16,7 @@ import type {
   TransitionEventParams,
   UpdateEventDetailsParams,
 } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
-import { events, eventActivities, eventFormFields, registrationFiles, registrations, ticketLots } from "@/server/infrastructure/persistence/schema";
+import { events, eventActivities, eventFormFields, coupons, registrationFiles, registrations, ticketLots } from "@/server/infrastructure/persistence/schema";
 import type { EventRow } from "@/server/infrastructure/persistence/schema";
 import type { Database } from "@/server/infrastructure/persistence/database";
 
@@ -73,7 +73,42 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
     const eventData = toEventInsert(params.event);
     await this.database.transaction(async (transaction) => {
       await transaction.insert(events).values(eventData);
-      if (params.lots.length) await transaction.insert(ticketLots).values(params.lots.map((lot) => ({ ...lot, eventId: params.event.id.toString() })));
+      if (params.lots.length) {
+        await transaction.insert(ticketLots).values(
+          params.lots.map((lot) => ({
+            id: lot.id,
+            eventId: params.event.id.toString(),
+            name: lot.name,
+            priceCents: lot.priceCents,
+            maxQuantity: lot.maxQuantity,
+            startAt: lot.startAt,
+            endAt: lot.endAt,
+            active: lot.active,
+            sortOrder: lot.sortOrder,
+          }))
+        );
+        for (const lot of params.lots) {
+          if (lot.coupons && lot.coupons.length > 0) {
+            await transaction.insert(coupons).values(
+              lot.coupons.map((coupon) => ({
+                id: coupon.id ?? crypto.randomUUID(),
+                eventId: params.event.id.toString(),
+                lotId: lot.id,
+                code: coupon.code.trim().toUpperCase(),
+                type: coupon.type,
+                discountValue: coupon.discountValue,
+                maxUses: coupon.maxUses ?? null,
+                usedCount: 0,
+                startAt: coupon.startAt,
+                endAt: coupon.endAt,
+                active: coupon.active,
+                allowedEmails: coupon.allowedEmails ?? [],
+                allowedCpfs: coupon.allowedCpfs ?? [],
+              }))
+            );
+          }
+        }
+      }
       if (params.fields.length) await transaction.insert(eventFormFields).values(params.fields.map((field) => ({ ...field, eventId: params.event.id.toString() })));
       if (params.activities.length) await transaction.insert(eventActivities).values(params.activities.map((activity) => ({ ...activity, eventId: params.event.id.toString() })));
     });
@@ -121,6 +156,7 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
               : undefined;
           const existingLot = existingById ?? fallbackByIndex;
 
+          const targetLotId = existingLot ? existingLot.id : lot.id;
           if (existingLot) {
             matchedLotIds.add(existingLot.id);
             await transaction
@@ -136,9 +172,79 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
               })
               .where(eq(ticketLots.id, existingLot.id));
           } else {
+            const { coupons: _c, ...lotData } = lot;
             await transaction
               .insert(ticketLots)
-              .values({ ...lot, eventId: params.eventId });
+              .values({ ...lotData, id: targetLotId, eventId: params.eventId });
+          }
+
+          if (lot.coupons !== undefined) {
+            const existingCoupons = await transaction
+              .select()
+              .from(coupons)
+              .where(and(eq(coupons.eventId, params.eventId), eq(coupons.lotId, targetLotId)));
+            const matchedCouponIds = new Set<string>();
+
+            for (const coupon of lot.coupons) {
+              const existingCoupon = existingCoupons.find(
+                (c) => (coupon.id && c.id === coupon.id) || c.code === coupon.code.trim().toUpperCase()
+              );
+              if (existingCoupon) {
+                matchedCouponIds.add(existingCoupon.id);
+                await transaction
+                  .update(coupons)
+                  .set({
+                    code: coupon.code.trim().toUpperCase(),
+                    type: coupon.type,
+                    discountValue: coupon.discountValue,
+                    maxUses: coupon.maxUses ?? null,
+                    startAt: coupon.startAt,
+                    endAt: coupon.endAt,
+                    active: coupon.active,
+                    allowedEmails: coupon.allowedEmails ?? [],
+                    allowedCpfs: coupon.allowedCpfs ?? [],
+                  })
+                  .where(eq(coupons.id, existingCoupon.id));
+              } else {
+                const newCouponId = coupon.id ?? crypto.randomUUID();
+                matchedCouponIds.add(newCouponId);
+                await transaction
+                  .insert(coupons)
+                  .values({
+                    id: newCouponId,
+                    eventId: params.eventId,
+                    lotId: targetLotId,
+                    code: coupon.code.trim().toUpperCase(),
+                    type: coupon.type,
+                    discountValue: coupon.discountValue,
+                    maxUses: coupon.maxUses ?? null,
+                    usedCount: 0,
+                    startAt: coupon.startAt,
+                    endAt: coupon.endAt,
+                    active: coupon.active,
+                    allowedEmails: coupon.allowedEmails ?? [],
+                    allowedCpfs: coupon.allowedCpfs ?? [],
+                  });
+              }
+            }
+
+            for (const existingCoupon of existingCoupons) {
+              if (matchedCouponIds.has(existingCoupon.id)) continue;
+              const [referenced] = await transaction
+                .select({ value: count() })
+                .from(registrations)
+                .where(eq(registrations.couponId, existingCoupon.id));
+              if (Number(referenced?.value ?? 0) === 0) {
+                await transaction
+                  .delete(coupons)
+                  .where(eq(coupons.id, existingCoupon.id));
+              } else {
+                await transaction
+                  .update(coupons)
+                  .set({ active: false })
+                  .where(eq(coupons.id, existingCoupon.id));
+              }
+            }
           }
         }
 
@@ -239,10 +345,11 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
     const eventId = params.row.id;
     const at = params.at ?? new Date();
     const atIso = at.toISOString();
-    const [lotRows, fieldRows, activityRows, totals] = await Promise.all([
+    const [lotRows, fieldRows, activityRows, couponRows, totals] = await Promise.all([
       this.database.select().from(ticketLots).where(eq(ticketLots.eventId, eventId)).orderBy(asc(ticketLots.sortOrder), asc(ticketLots.startAt)),
       this.database.select().from(eventFormFields).where(and(eq(eventFormFields.eventId, eventId), eq(eventFormFields.active, true))).orderBy(asc(eventFormFields.displayOrder)),
       this.database.select().from(eventActivities).where(eq(eventActivities.eventId, eventId)).orderBy(asc(eventActivities.startAt)),
+      this.database.select().from(coupons).where(eq(coupons.eventId, eventId)).orderBy(asc(coupons.code)),
       this.database.select({
         confirmed: sql<number>`count(*) filter (where ${registrations.status} = 'confirmada')`,
         reserved: sql<number>`count(*) filter (where ${registrations.status} in ('pendente', 'aguardando_pagamento') and ${registrations.reservationExpiresAt} > ${atIso})`,
@@ -257,7 +364,34 @@ export class DrizzleEventRepository extends EventRepository implements EventRepo
         sql`(${registrations.status} = 'confirmada' or ${registrations.reservationExpiresAt} > ${atIso})`,
         isNull(registrations.deletedAt),
       ));
-      return { id: lot.id, name: lot.name, priceCents: lot.priceCents, maxQuantity: lot.maxQuantity, soldCount: Number(sold?.value ?? 0), startAt: lot.startAt, endAt: lot.endAt, active: lot.active, sortOrder: lot.sortOrder };
+      const lotCoupons = couponRows
+        .filter((c) => c.lotId === lot.id)
+        .map((c) => ({
+          id: c.id,
+          lotId: c.lotId,
+          code: c.code,
+          type: (c.type === "valor_fixo" ? "valor_fixo" : "percentual") as "percentual" | "valor_fixo",
+          discountValue: c.discountValue,
+          maxUses: c.maxUses,
+          usedCount: c.usedCount,
+          startAt: c.startAt,
+          endAt: c.endAt,
+          active: c.active,
+          allowedEmails: c.allowedEmails ?? [],
+          allowedCpfs: c.allowedCpfs ?? [],
+        }));
+      return {
+        id: lot.id,
+        name: lot.name,
+        priceCents: lot.priceCents,
+        maxQuantity: lot.maxQuantity,
+        soldCount: Number(sold?.value ?? 0),
+        startAt: lot.startAt,
+        endAt: lot.endAt,
+        active: lot.active,
+        sortOrder: lot.sortOrder,
+        coupons: lotCoupons,
+      };
     }));
     const total = totals[0];
     return {

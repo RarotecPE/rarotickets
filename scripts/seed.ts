@@ -459,6 +459,7 @@ async function main(): Promise<void> {
       const couponValues: typeof schema.coupons.$inferInsert = {
         id: ids.coupon,
         eventId: ids.events.summit,
+        lotId: ids.lots.summitFirst,
         code: "DEMO50",
         type: "valor_fixo",
         discountValue: 50,

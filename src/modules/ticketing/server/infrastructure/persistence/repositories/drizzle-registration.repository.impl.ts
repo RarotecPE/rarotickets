@@ -16,10 +16,12 @@ import {
 } from "drizzle-orm";
 import { Identifier } from "@/@core/domain/identifier";
 import { Result } from "@/@core/domain/result";
+import { DomainError } from "@/@core/domain/errors/domain-error.base";
 import {
   Registration,
   RegistrationRuleError,
 } from "@/modules/ticketing/domain/registrations/entities/registration.aggregate";
+import { CouponUnavailableError } from "@/modules/ticketing/domain/coupons/entities/coupon.entity";
 import { RegistrationRepository } from "@/modules/ticketing/domain/registrations/repositories/registration-repository.interface";
 import type {
   AttachCheckoutParams,
@@ -52,6 +54,8 @@ import type {
   RegistrationCheckInDetail,
   RegistrationListItem,
   RegistrationListResult,
+  ValidateCouponParams,
+  ValidatedCouponResult,
 } from "@/modules/ticketing/domain/registrations/repositories/registration-repository.interface";
 import { PricingDomainService } from "@/modules/ticketing/domain/registrations/services/pricing.domain-service";
 import {
@@ -281,12 +285,15 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
           transaction,
           params.couponCode,
           event.id,
+          lot?.id ?? null,
+          params.participant.email,
+          params.participant.cpf,
           params.at,
         );
         if (params.couponCode && !coupon)
           return this.fail(
             "COUPON_UNAVAILABLE",
-            "Cupom inválido, inativo ou fora da validade.",
+            "Cupom não disponível.",
           );
         if (coupon && coupon.maxUses !== null) {
           const [held] = await transaction
@@ -305,8 +312,8 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
             );
           if (coupon.usedCount + Number(held?.value ?? 0) >= coupon.maxUses)
             return this.fail(
-              "COUPON_LIMIT_REACHED",
-              "Este cupom atingiu o limite de utilizações.",
+              "COUPON_UNAVAILABLE",
+              "Cupom não disponível.",
             );
         }
         const originalCents =
@@ -1740,6 +1747,9 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
     transaction: DrizzleTransaction,
     code: string | null,
     eventId: string,
+    lotId: string | null,
+    participantEmail: string | null,
+    participantCpf: string | null,
     at: Date,
   ): Promise<{
     id: string;
@@ -1748,18 +1758,20 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
     maxUses: number | null;
     usedCount: number;
   } | null> {
-    if (!code) return null;
+    if (!code || !lotId) return null;
+    const normalizedCode = code.trim().toUpperCase();
     await transaction.execute(
-      sql`select id from coupons where code = ${code} for update`,
+      sql`select id from coupons where code = ${normalizedCode} and event_id = ${eventId} for update`,
     );
     const [coupon] = await transaction
       .select()
       .from(coupons)
       .where(
         and(
-          eq(coupons.code, code),
+          eq(coupons.code, normalizedCode),
+          eq(coupons.eventId, eventId),
+          eq(coupons.lotId, lotId),
           eq(coupons.active, true),
-          or(isNull(coupons.eventId), eq(coupons.eventId, eventId)),
           lte(coupons.startAt, at),
           gte(coupons.endAt, at),
         ),
@@ -1768,6 +1780,24 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
     if (!coupon) return null;
     if (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses)
       return null;
+
+    const allowedEmails = coupon.allowedEmails ?? [];
+    const allowedCpfs = coupon.allowedCpfs ?? [];
+    if (allowedEmails.length > 0 || allowedCpfs.length > 0) {
+      const emailMatch =
+        participantEmail &&
+        allowedEmails
+          .map((e) => e.trim().toLowerCase())
+          .includes(participantEmail.trim().toLowerCase());
+      const cleanCpf = participantCpf ? participantCpf.replace(/\D/g, "") : null;
+      const cpfMatch =
+        cleanCpf &&
+        allowedCpfs.map((c) => c.replace(/\D/g, "")).includes(cleanCpf);
+      if (!emailMatch && !cpfMatch) {
+        return null;
+      }
+    }
+
     return {
       id: coupon.id,
       type: coupon.type,
@@ -1775,6 +1805,111 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
       maxUses: coupon.maxUses,
       usedCount: coupon.usedCount,
     };
+  }
+
+  async validateCoupon(
+    params: ValidateCouponParams,
+  ): Promise<Result<ValidatedCouponResult, DomainError>> {
+    const genericError = new CouponUnavailableError();
+
+    if (!params.code || !params.lotId || !params.eventId) {
+      return Result.fail(genericError);
+    }
+
+    const normalizedCode = params.code.trim().toUpperCase();
+
+    const [lot] = await this.database
+      .select()
+      .from(ticketLots)
+      .where(
+        and(
+          eq(ticketLots.id, params.lotId),
+          eq(ticketLots.eventId, params.eventId),
+          eq(ticketLots.active, true),
+        ),
+      )
+      .limit(1);
+
+    if (!lot) {
+      return Result.fail(genericError);
+    }
+
+    const [coupon] = await this.database
+      .select()
+      .from(coupons)
+      .where(
+        and(
+          eq(coupons.code, normalizedCode),
+          eq(coupons.eventId, params.eventId),
+          eq(coupons.lotId, params.lotId),
+          eq(coupons.active, true),
+          lte(coupons.startAt, params.at),
+          gte(coupons.endAt, params.at),
+        ),
+      )
+      .limit(1);
+
+    if (!coupon) {
+      return Result.fail(genericError);
+    }
+
+    if (coupon.maxUses !== null) {
+      const [held] = await this.database
+        .select({ value: count() })
+        .from(registrations)
+        .where(
+          and(
+            eq(registrations.couponId, coupon.id),
+            inArray(registrations.status, ["pendente", "aguardando_pagamento"]),
+            gt(registrations.reservationExpiresAt, params.at),
+            isNull(registrations.deletedAt),
+          ),
+        );
+
+      if (coupon.usedCount + Number(held?.value ?? 0) >= coupon.maxUses) {
+        return Result.fail(genericError);
+      }
+    }
+
+    const allowedEmails = coupon.allowedEmails ?? [];
+    const allowedCpfs = coupon.allowedCpfs ?? [];
+    if (allowedEmails.length > 0 || allowedCpfs.length > 0) {
+      const emailMatch =
+        params.participantEmail &&
+        allowedEmails
+          .map((e) => e.trim().toLowerCase())
+          .includes(params.participantEmail.trim().toLowerCase());
+      const cleanCpf = params.participantCpf
+        ? params.participantCpf.replace(/\D/g, "")
+        : null;
+      const cpfMatch =
+        cleanCpf &&
+        allowedCpfs.map((c) => c.replace(/\D/g, "")).includes(cleanCpf);
+
+      if (!emailMatch && !cpfMatch) {
+        return Result.fail(genericError);
+      }
+    }
+
+    const pricingResult = this.pricingService.execute({
+      originalCents: lot.priceCents,
+      discountType: coupon.type,
+      discountValue: coupon.discountValue,
+    });
+
+    if (pricingResult.isFailure) {
+      return Result.fail(genericError);
+    }
+
+    return Result.ok({
+      couponId: coupon.id,
+      code: coupon.code,
+      type: coupon.type,
+      discountValue: coupon.discountValue,
+      originalCents: pricingResult.value.originalCents,
+      discountCents: pricingResult.value.discountCents,
+      finalCents: pricingResult.value.finalCents,
+    });
   }
 
   private async countActiveSeats(
