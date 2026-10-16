@@ -68,18 +68,24 @@ export class ConfirmManualPaymentUseCase extends UseCase<
       );
     }
 
+    const isCourtesy = result.finalCents === 0 || result.paymentProvider === "cortesia";
+    const action = isCourtesy && result.paymentProvider === "cortesia" ? "courtesy.granted" : "payment.manual_confirmed";
+    const severity = isCourtesy ? "WARNING" : "INFO";
+
     await this.auditRepository.write({
       userId: input.userId,
       userName: input.userName,
-      action: "payment.manual_confirmed",
+      action,
       entity: "registration",
       recordId: result.registrationCode,
+      severity,
       beforeData: null,
       afterData: {
         registrationId: result.registrationId,
         status: result.status,
         paymentProvider: result.paymentProvider,
         finalCents: result.finalCents,
+        isCourtesy,
       },
       ip: input.ip,
     });

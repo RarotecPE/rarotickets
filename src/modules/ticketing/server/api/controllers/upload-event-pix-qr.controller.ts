@@ -8,6 +8,7 @@ import {
 } from "@/server/api/http-response.util";
 import { requirePermission } from "@/server/auth/permission-guard.util";
 import { UploadEventPixQrUseCase } from "@/modules/ticketing/application/use-cases/upload-event-pix-qr/upload-event-pix-qr.use-case";
+import { auditClient, getRequestContext, sessionToAuditActor } from "@/lib/audit";
 
 export type UploadEventPixQrDependencies = {
   useCase: UploadEventPixQrUseCase;
@@ -47,6 +48,22 @@ export class UploadEventPixQrController extends Controller<
       });
       if (result.isFailure)
         return resultFailureResponse({ error: result.error, status: 422 });
+      const context = getRequestContext(request);
+      const actor = sessionToAuditActor(guard.session);
+      auditClient.log({
+        category: "event",
+        action: "event.pix_qr_uploaded",
+        severity: "INFO",
+        actor,
+        context,
+        targets: [{ type: "file", id: result.value.pixQrCodeUrl, label: file.name || "pix_qr" }],
+        details: {
+          pix_qr_code_url: result.value.pixQrCodeUrl,
+          file_name: file.name,
+          mime_type: file.type,
+          size_bytes: file.size,
+        },
+      });
       return jsonSuccess(result.value, 201);
     } catch (error) {
       return internalErrorResponse(error);

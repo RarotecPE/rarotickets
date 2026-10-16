@@ -6,6 +6,7 @@ import {
   internalErrorResponse,
 } from "@/server/api/http-response.util";
 import { setParticipantSessionCookie } from "@/server/auth/participant-session-cookie.util";
+import { auditClient, getRequestContext } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +24,37 @@ export async function POST(request: NextRequest) {
     });
 
     if (result.isFailure) {
+      const context = getRequestContext(request);
+      auditClient.log({
+        category: "auth",
+        action: "participant.login_failed",
+        severity: "WARNING",
+        actor: { type: "anonymous" },
+        context,
+        targets: [{ type: "system", id: "rarotickets", label: "RaroTickets" }],
+        details: { method: "otp", identifier: body.identifier || null },
+      });
       return resultFailureResponse({ error: result.error, status: 401 });
     }
+
+    const context = getRequestContext(request);
+    auditClient.log({
+      category: "auth",
+      action: "participant.logged_in",
+      severity: "INFO",
+      actor: {
+        type: "user",
+        userId: result.value.participant.id,
+        name: result.value.participant.name,
+        email: result.value.participant.email,
+        role: "participante",
+      },
+      context,
+      targets: [
+        { type: "participant", id: result.value.participant.id, label: result.value.participant.name },
+      ],
+      details: { method: "otp" },
+    });
 
     const response = jsonSuccess({
       participant: result.value.participant,

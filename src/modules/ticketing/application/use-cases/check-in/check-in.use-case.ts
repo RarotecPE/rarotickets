@@ -39,7 +39,25 @@ export class CheckInUseCase extends UseCase<CheckInInputDto, CheckInOutputDto> {
       supervisorReentry: reentryGranted,
       justification: input.justification,
     });
-    if (eligibility.isFailure) return Result.fail(eligibility.error);
+    if (eligibility.isFailure) {
+      if (eligibility.error.code === "CHECKIN_DUPLICATE") {
+        await this.auditRepository.write({
+          userId: input.operatorId,
+          userName: input.operatorName,
+          action: "checkin.duplicate_rejected",
+          entity: "registration",
+          recordId: context.registrationCode,
+          severity: "WARNING",
+          beforeData: null,
+          afterData: {
+            alreadyCheckedIn: true,
+            reason: eligibility.error.message,
+          },
+          ip: input.ip,
+        });
+      }
+      return Result.fail(eligibility.error);
+    }
     const result = await this.checkInRepository.create({
       registrationId,
       operatorId: input.operatorId,
@@ -49,10 +67,11 @@ export class CheckInUseCase extends UseCase<CheckInInputDto, CheckInOutputDto> {
       justification: eligibility.value.type === "reentrada_autorizada" ? input.justification?.trim() ?? null : null,
     });
     if (!result.accepted) return Result.ok(result);
+    const action = eligibility.value.type === "reentrada_autorizada" ? "checkin.reentry_authorized" : "checkin.confirmed";
     await this.auditRepository.write({
       userId: input.operatorId,
       userName: input.operatorName,
-      action: result.previousCheckInAt ? "checkin.reentry" : "checkin.created",
+      action,
       entity: "registration",
       recordId: result.registrationCode,
       beforeData: result.previousCheckInAt ? { previousCheckInAt: result.previousCheckInAt.toISOString() } : null,

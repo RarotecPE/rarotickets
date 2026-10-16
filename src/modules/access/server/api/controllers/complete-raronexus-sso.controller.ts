@@ -5,6 +5,7 @@ import { clearTemporarySsoCookies, setSessionCookie } from "@/server/auth/auth-s
 import { createRaroNexusClient, RAROTICKETS_SSO_NEXT_COOKIE, RAROTICKETS_SSO_STATE_COOKIE } from "@/server/auth/raronexus.client";
 import { stateMatches, validateInternalPath } from "@/server/auth/sso-url.util";
 import { readEnvironment } from "@/server/config/environment.config";
+import { auditClient, getRequestContext } from "@/lib/audit";
 
 type RedirectToLoginParams = { baseUrl: string; reason: string };
 
@@ -26,9 +27,42 @@ export class CompleteRaroNexusSsoController extends Controller<NextRequest, Next
       const response = NextResponse.redirect(new URL(nextPath, environment.appBaseUrl));
       setSessionCookie(response, { token: exchange.token });
       clearTemporarySsoCookies(response);
+
+      const context = getRequestContext(request);
+      auditClient.log({
+        category: "auth",
+        action: "auth.sso_login_completed",
+        severity: "INFO",
+        actor: {
+          type: "user",
+          userId: exchange.user.id,
+          name: exchange.user.nome,
+          email: exchange.user.email,
+          role: exchange.role.chave,
+        },
+        context,
+        targets: [{ type: "user", id: exchange.user.id, label: exchange.user.nome }],
+        details: {
+          role: exchange.role.chave,
+          role_name: exchange.role.nome,
+        },
+      });
+
       return response;
     } catch (error) {
       const reason = error instanceof AuthFailure && error.code === "UNKNOWN_ROLE" ? "role_not_allowed" : "sso_unavailable";
+      if (reason === "role_not_allowed") {
+        const context = getRequestContext(request);
+        auditClient.log({
+          category: "auth",
+          action: "auth.sso_access_denied",
+          severity: "WARNING",
+          actor: { type: "anonymous" },
+          context,
+          targets: [{ type: "system", id: "rarotickets", label: "RaroTickets" }],
+          details: { reason: "role_not_allowed" },
+        });
+      }
       return this.redirectToLogin({ baseUrl: environment.appBaseUrl, reason });
     }
   }

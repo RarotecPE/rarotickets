@@ -17,7 +17,7 @@ export class IssueCertificatesUseCase extends UseCase<IssueCertificatesInputDto,
   }
   async execute(input: IssueCertificatesInputDto): Promise<Result<IssueCertificatesOutputDto>> {
     const result = await this.certificateRepository.issueEligible({ eventId: input.eventId, actorId: input.userId, canViewAll: input.canViewAll, at: new Date() });
-    await this.auditRepository.write({ userId: input.userId, userName: input.userName, action: "certificates.issued", entity: "event", recordId: input.eventId, beforeData: null, afterData: { created: result.created, existing: result.existing }, ip: input.ip });
+    await this.auditRepository.write({ userId: input.userId, userName: input.userName, action: "certificate.issued", entity: "event", recordId: input.eventId, beforeData: null, afterData: { created: result.created, existing: result.existing }, ip: input.ip });
     return Result.ok(result);
   }
 }

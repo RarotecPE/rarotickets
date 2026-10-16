@@ -6,6 +6,7 @@ import {
   internalErrorResponse,
 } from "@/server/api/http-response.util";
 import { setParticipantSessionCookie } from "@/server/auth/participant-session-cookie.util";
+import { auditClient, getRequestContext } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,28 @@ export async function POST(request: NextRequest) {
     if (result.isFailure) {
       return resultFailureResponse({ error: result.error, status: 400 });
     }
+
+    const context = getRequestContext(request);
+    auditClient.log({
+      category: "participant",
+      action: "participant.registered",
+      severity: "INFO",
+      actor: {
+        type: "user",
+        userId: result.value.participant.id,
+        name: result.value.participant.name,
+        email: result.value.participant.email,
+        role: "participante",
+      },
+      context,
+      targets: [
+        { type: "participant", id: result.value.participant.id, label: result.value.participant.name },
+      ],
+      details: {
+        email: result.value.participant.email,
+        phone: result.value.participant.phone,
+      },
+    });
 
     const response = jsonSuccess({
       participant: result.value.participant,

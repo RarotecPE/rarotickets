@@ -246,6 +246,7 @@ export function createTicketingContainer(): TicketingContainer {
       registrationRepository,
       credentialProvider,
       paymentGateway,
+      auditRepository,
       publicBaseUrl: environment.appBaseUrl,
     }),
     listRegistrations: new ListRegistrationsUseCase({ registrationRepository }),

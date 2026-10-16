@@ -167,7 +167,39 @@ export class CreatePublicRegistrationUseCase extends UseCase<CreatePublicRegistr
         );
       }
     }
-    await this.auditRepository.write({ userId: "public", userName: participant.name, action: "registration.created", entity: "registration", recordId: withCheckout.registrationId, beforeData: null, afterData: { eventSlug: withCheckout.eventSlug, status: withCheckout.status, totalCents: withCheckout.finalCents }, ip: input.ip });
+    await this.auditRepository.write({
+      userId: "public",
+      userName: participant.name,
+      action: "registration.created",
+      entity: "registration",
+      recordId: withCheckout.registrationId,
+      beforeData: null,
+      afterData: {
+        eventSlug: withCheckout.eventSlug,
+        status: withCheckout.status,
+        totalCents: withCheckout.finalCents,
+        registrationCode: withCheckout.registrationCode,
+      },
+      ip: input.ip,
+    });
+
+    if (withCheckout.status === "lista_espera") {
+      await this.auditRepository.write({
+        userId: "public",
+        userName: participant.name,
+        action: "waitlist.joined",
+        entity: "waitlist",
+        recordId: withCheckout.registrationId,
+        beforeData: null,
+        afterData: {
+          eventId: event.id,
+          eventSlug: withCheckout.eventSlug,
+          registrationCode: withCheckout.registrationCode,
+          participantEmail: participant.email,
+        },
+        ip: input.ip,
+      });
+    }
     return Result.ok({
       ...withCheckout,
       participantUrl,

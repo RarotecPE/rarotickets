@@ -41,7 +41,19 @@ export class TransitionEventUseCase extends UseCase<TransitionEventInputDto, Tra
       nextStatus: transition.value.status, at: now, justification: input.justification,
     });
     if (!updated) return Result.fail(new Error("Evento não encontrado ou você não tem acesso."));
-    await this.auditRepository.write({ userId: input.userId, userName: input.userName, action: `event.status.${input.nextStatus}`, entity: "event", recordId: input.eventId, beforeData: { status: beforeStatus }, afterData: { status: updated.props.status }, ip: input.ip });
+    const action = input.nextStatus === "cancelado" ? "event.cancelled" : "event.status_changed";
+    const severity = input.nextStatus === "cancelado" ? "CRITICAL" : "INFO";
+    await this.auditRepository.write({
+      userId: input.userId,
+      userName: input.userName,
+      action,
+      entity: "event",
+      recordId: input.eventId,
+      severity,
+      beforeData: { status: beforeStatus },
+      afterData: { status: updated.props.status, justification: input.justification ?? null },
+      ip: input.ip,
+    });
 
     if (this.promoteWaitlist && updated.capacity.waitlisted > 0) {
       try {
