@@ -72,6 +72,7 @@ export type PaginatedAuditLogs = {
     beforeData: Record<string, unknown> | null;
     afterData: Record<string, unknown> | null;
     ip: string | null;
+    forwardedAt?: Date | null;
     createdAt: Date;
   }>;
   total: number;

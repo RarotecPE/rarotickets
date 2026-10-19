@@ -292,9 +292,13 @@ export const auditLogs = pgTable("audit_logs", {
   beforeData: jsonb("before_data").$type<Record<string, unknown> | null>(),
   afterData: jsonb("after_data").$type<Record<string, unknown> | null>(),
   ip: varchar("ip", { length: 80 }),
+  forwardedAt: timestamp("forwarded_at", { withTimezone: true, mode: "date" }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-}, (table) => [index("audit_logs_entity_date_idx").on(table.entity, table.recordId, table.createdAt)]);
+}, (table) => [
+  index("audit_logs_entity_date_idx").on(table.entity, table.recordId, table.createdAt),
+  index("audit_logs_forwarded_idx").on(table.forwardedAt),
+]);
 
 export const outboxMessages = pgTable("outbox_messages", {
   id: uuid("id").defaultRandom().primaryKey(),

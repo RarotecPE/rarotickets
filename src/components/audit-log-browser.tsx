@@ -207,6 +207,14 @@ export function AuditLogBrowser() {
                 label="IP de origem"
                 value={selected.ip ?? "Não informado"}
               />
+              <AuditDetail
+                label="Sincronização Nexus"
+                value={
+                  selected.forwardedAt
+                    ? `Sincronizado (${formatDate({ value: selected.forwardedAt, withTime: true })})`
+                    : "Pendente (Outbox)"
+                }
+              />
             </dl>
             <AuditJson label="Dados anteriores" value={selected.beforeData} />
             <AuditJson label="Dados registrados" value={selected.afterData} />

@@ -36,6 +36,13 @@
       "when": 1791925473756,
       "tag": "0004_spotty_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792437672281,
+      "tag": "0005_cool_salo",
+      "breakpoints": true
     }
   ]
 }
