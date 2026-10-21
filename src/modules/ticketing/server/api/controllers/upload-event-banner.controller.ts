@@ -35,6 +35,7 @@ export class UploadEventBannerController extends Controller<NextRequest, NextRes
         targets: [{ type: "file", id: result.value.bannerUrl, label: file.name || "banner" }],
         details: {
           banner_url: result.value.bannerUrl,
+          hasAttachment: true,
           file_name: file.name,
           mime_type: file.type,
           size_bytes: file.size,

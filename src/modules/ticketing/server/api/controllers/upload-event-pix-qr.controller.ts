@@ -59,6 +59,7 @@ export class UploadEventPixQrController extends Controller<
         targets: [{ type: "file", id: result.value.pixQrCodeUrl, label: file.name || "pix_qr" }],
         details: {
           pix_qr_code_url: result.value.pixQrCodeUrl,
+          hasAttachment: true,
           file_name: file.name,
           mime_type: file.type,
           size_bytes: file.size,
