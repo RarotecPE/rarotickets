@@ -29,6 +29,8 @@ import type {
   CancelRegistrationResult,
   ConfirmManualPaymentParams,
   ConfirmManualPaymentResult,
+  ExtendReservationParams,
+  ExtendReservationResult,
   CreatePublicRegistrationOutput,
   CreatePublicRegistrationParams,
   ExpireReservationsParams,
@@ -1173,6 +1175,146 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
         paymentProvider: payment?.provider ?? "pix_manual",
         paymentExternalId: payment?.externalId ?? null,
       };
+    });
+  }
+
+  async extendReservation(
+    params: ExtendReservationParams,
+  ): Promise<Result<ExtendReservationResult, DomainError>> {
+    if (params.expiresAt <= params.at) {
+      return Result.fail(
+        new RegistrationRuleError({
+          code: "INVALID_EXPIRATION_DATE",
+          message: "A nova data de expiração da reserva deve estar no futuro.",
+        }),
+      );
+    }
+
+    return this.database.transaction(async (transaction) => {
+      const accessFilters = [
+        eq(registrations.id, params.registrationId),
+        isNull(registrations.deletedAt),
+      ];
+      if (!params.canManageAll) {
+        accessFilters.push(eq(events.createdByGlobalUserId, params.actorId));
+      }
+
+      const [row] = await transaction
+        .select({
+          registration: registrations,
+          participant: participants,
+          event: events,
+        })
+        .from(registrations)
+        .innerJoin(participants, eq(registrations.participantId, participants.id))
+        .innerJoin(events, eq(registrations.eventId, events.id))
+        .where(and(...accessFilters))
+        .for("update")
+        .limit(1);
+
+      if (!row) {
+        return Result.fail(
+          new RegistrationRuleError({
+            code: "REGISTRATION_NOT_FOUND",
+            message: "Inscrição não encontrada ou você não tem permissão para gerenciá-la.",
+          }),
+        );
+      }
+
+      const { registration, participant, event } = row;
+
+      if (registration.status === "confirmada") {
+        return Result.fail(
+          new RegistrationRuleError({
+            code: "ALREADY_CONFIRMED",
+            message: "A inscrição já está confirmada e não requer reserva.",
+          }),
+        );
+      }
+
+      const [payment] = await transaction
+        .select()
+        .from(payments)
+        .where(eq(payments.registrationId, registration.id))
+        .limit(1);
+
+      const isPendingOrAwaiting =
+        registration.status === "aguardando_pagamento" ||
+        registration.status === "pendente";
+
+      const isExpiredCancelled =
+        registration.status === "cancelada" &&
+        (registration.cancellationReason === "Reserva expirada" ||
+          Boolean(registration.cancellationReason?.toLowerCase().includes("expirad")) ||
+          payment?.status === "expirado");
+
+      if (!isPendingOrAwaiting && !isExpiredCancelled) {
+        return Result.fail(
+          new RegistrationRuleError({
+            code: "STATUS_NOT_ELIGIBLE",
+            message:
+              "Apenas inscrições aguardando pagamento ou com reserva expirada podem ter o prazo estendido.",
+          }),
+        );
+      }
+
+      const hasActiveReservation =
+        isPendingOrAwaiting &&
+        registration.reservationExpiresAt !== null &&
+        registration.reservationExpiresAt > params.at;
+
+      if (!hasActiveReservation) {
+        const hasCapacity = await this.hasAvailableCapacity(
+          transaction,
+          event.id,
+          event.maxCapacity,
+          params.at,
+        );
+        if (!hasCapacity) {
+          return Result.fail(
+            new RegistrationRuleError({
+              code: "EVENT_CAPACITY_EXCEEDED",
+              message:
+                "Não há vagas disponíveis no evento para estender ou reativar esta reserva.",
+            }),
+          );
+        }
+      }
+
+      const nextStatus =
+        registration.status === "cancelada"
+          ? ("aguardando_pagamento" as const)
+          : registration.status;
+
+      await transaction
+        .update(registrations)
+        .set({
+          status: nextStatus,
+          reservationExpiresAt: params.expiresAt,
+          cancellationReason: null,
+          updatedAt: params.at,
+        })
+        .where(eq(registrations.id, registration.id));
+
+      if (payment && payment.status === "expirado") {
+        await transaction
+          .update(payments)
+          .set({
+            status: "aguardando",
+            updatedAt: params.at,
+          })
+          .where(eq(payments.id, payment.id));
+      }
+
+      return Result.ok({
+        registrationId: registration.id,
+        registrationCode: registration.code,
+        status: nextStatus,
+        previousExpiresAt: registration.reservationExpiresAt,
+        newExpiresAt: params.expiresAt,
+        eventId: event.id,
+        participantName: participant.name,
+      });
     });
   }
 

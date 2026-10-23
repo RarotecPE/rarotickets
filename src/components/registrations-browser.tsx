@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock,
   CreditCard,
   Download,
   Eye,
@@ -42,7 +43,7 @@ import type {
   RegistrationListItem,
   RegistrationListResult,
 } from "@/modules/ticketing/domain/registrations/repositories/registration-repository.interface";
-import { cn, formatCpf, formatCurrency, formatDate, formatPhone } from "@/lib/utils";
+import { cn, formatCpf, formatCurrency, formatDate, formatDateInput, formatPhone } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 type RegistrationFilters = {
@@ -105,6 +106,11 @@ export function RegistrationsBrowser() {
     null,
   );
   const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [extendTarget, setExtendTarget] =
+    useState<RegistrationListItem | null>(null);
+  const [extendExpiresAt, setExtendExpiresAt] = useState<string>("");
+  const [extendError, setExtendError] = useState<string | null>(null);
+  const [extending, setExtending] = useState(false);
   const canCancel = Boolean(
     auth.session?.permissions.includes("registrations:cancel"),
   );
@@ -294,6 +300,72 @@ export function RegistrationsBrowser() {
       );
     } finally {
       setConfirmingPayment(false);
+    }
+  }
+
+  function openExtendDialog(item: RegistrationListItem): void {
+    setExtendTarget(item);
+    setExtendError(null);
+    const now = new Date();
+    let initialDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    if (item.reservationExpiresAt) {
+      const existing = new Date(item.reservationExpiresAt);
+      if (existing > now) {
+        initialDate = new Date(existing.getTime() + 24 * 60 * 60 * 1000);
+      }
+    }
+    setExtendExpiresAt(formatDateInput(initialDate));
+  }
+
+  async function submitExtendReservation(): Promise<void> {
+    if (!extendTarget) return;
+    if (!extendExpiresAt) {
+      setExtendError("Informe a nova data e hora de expiração da reserva.");
+      return;
+    }
+    const chosenDate = new Date(extendExpiresAt);
+    if (isNaN(chosenDate.getTime())) {
+      setExtendError("Data e hora inválidas.");
+      return;
+    }
+    if (chosenDate.getTime() <= Date.now()) {
+      setExtendError("A nova data de expiração da reserva deve estar no futuro.");
+      return;
+    }
+    setExtending(true);
+    setExtendError(null);
+    try {
+      const res = await ticketingApi.extendRegistrationReservation({
+        registrationId: extendTarget.id,
+        expiresAt: chosenDate.toISOString(),
+      });
+      setNotice(
+        `Tempo de reserva da inscrição ${res.registrationCode} estendido com sucesso até ${formatDate({ value: res.reservationExpiresAt, withTime: true })}.`,
+      );
+      setExtendTarget(null);
+      if (detailTarget?.id === extendTarget.id) {
+        setDetailTarget((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: res.status as RegistrationListItem["status"],
+                reservationExpiresAt: new Date(res.reservationExpiresAt),
+                cancellationReason:
+                  res.status !== "cancelada" ? null : prev.cancellationReason,
+              }
+            : null,
+        );
+      }
+      setLoading(true);
+      setReloadVersion((current) => current + 1);
+    } catch (caught) {
+      setExtendError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível estender a reserva da inscrição.",
+      );
+    } finally {
+      setExtending(false);
     }
   }
 
@@ -535,6 +607,7 @@ export function RegistrationsBrowser() {
           onSelectDetail={setDetailTarget}
           onCancel={setCancelTarget}
           onConfirmPayment={setConfirmPaymentTarget}
+          onExtendReservation={openExtendDialog}
         />
       ) : (
         <Panel>
@@ -597,6 +670,9 @@ export function RegistrationsBrowser() {
         onRequestConfirmPayment={(item) => {
           setConfirmPaymentTarget(item);
         }}
+        onRequestExtendReservation={(item) => {
+          openExtendDialog(item);
+        }}
       />
 
       <Dialog
@@ -646,6 +722,103 @@ export function RegistrationsBrowser() {
                 <>
                   <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                   Confirmar recebimento
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(extendTarget)}
+        onClose={() => {
+          if (!extending) {
+            setExtendTarget(null);
+            setExtendError(null);
+          }
+        }}
+        title="Estender reserva da vaga"
+        description={
+          extendTarget
+            ? `Defina um novo prazo para a inscrição ${extendTarget.code} (${extendTarget.participantName}) concluir o pagamento.`
+            : undefined
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <InlineAlert tone="info">
+            Ao estender a reserva, a vaga do participante será mantida ou reativada, garantindo seu lugar até a data e hora informadas.
+          </InlineAlert>
+
+          {extendTarget ? (
+            <div className="rounded-app-md border border-app-border bg-app-surface-elevated/40 p-3 text-xs space-y-1">
+              <div>
+                <span className="font-semibold text-app-foreground">Situação atual da reserva: </span>
+                {extendTarget.status === "cancelada" ? (
+                  <span className="text-app-danger font-medium">Expirada e cancelada</span>
+                ) : extendTarget.reservationExpiresAt && new Date(extendTarget.reservationExpiresAt).getTime() < Date.now() ? (
+                  <span className="text-app-danger font-medium">
+                    Expirada em {formatDate({ value: extendTarget.reservationExpiresAt, withTime: true })}
+                  </span>
+                ) : extendTarget.reservationExpiresAt ? (
+                  <span className="text-app-warning font-medium">
+                    Ativa até {formatDate({ value: extendTarget.reservationExpiresAt, withTime: true })}
+                  </span>
+                ) : (
+                  <span className="text-app-muted-foreground">Sem prazo registrado</span>
+                )}
+              </div>
+              <div>
+                <span className="font-semibold text-app-foreground">Evento: </span>
+                <span className="text-app-muted-foreground">{extendTarget.eventTitle}</span>
+              </div>
+            </div>
+          ) : null}
+
+          <Field
+            label="Nova data e hora de expiração da reserva *"
+            htmlFor="extend-reservation-expires-at"
+            hint="Selecione uma data e horário futuros para expirar a reserva da vaga."
+          >
+            <input
+              id="extend-reservation-expires-at"
+              type="datetime-local"
+              value={extendExpiresAt}
+              min={formatDateInput(new Date())}
+              onChange={(e) => setExtendExpiresAt(e.target.value)}
+              className={inputCls}
+              disabled={extending}
+            />
+          </Field>
+
+          {extendError ? (
+            <InlineAlert tone="danger">{extendError}</InlineAlert>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={extending}
+              onClick={() => {
+                setExtendTarget(null);
+                setExtendError(null);
+              }}
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={extending}
+              onClick={() => void submitExtendReservation()}
+            >
+              {extending ? (
+                "Estendendo…"
+              ) : (
+                <>
+                  <Clock className="h-4 w-4" aria-hidden="true" />
+                  Estender reserva
                 </>
               )}
             </Button>
@@ -715,6 +888,7 @@ function RegistrationTable({
   onSelectDetail,
   onCancel,
   onConfirmPayment,
+  onExtendReservation,
 }: {
   items: RegistrationListItem[];
   canCancel: boolean;
@@ -722,6 +896,7 @@ function RegistrationTable({
   onSelectDetail: (item: RegistrationListItem) => void;
   onCancel: (item: RegistrationListItem) => void;
   onConfirmPayment: (item: RegistrationListItem) => void;
+  onExtendReservation: (item: RegistrationListItem) => void;
 }) {
   return (
     <Panel>
@@ -767,6 +942,7 @@ function RegistrationTable({
                 onSelectDetail={onSelectDetail}
                 onCancel={onCancel}
                 onConfirmPayment={onConfirmPayment}
+                onExtendReservation={onExtendReservation}
               />
             ))}
           </tbody>
@@ -783,6 +959,7 @@ function RegistrationRow({
   onSelectDetail,
   onCancel,
   onConfirmPayment,
+  onExtendReservation,
 }: {
   item: RegistrationListItem;
   canCancel: boolean;
@@ -790,6 +967,7 @@ function RegistrationRow({
   onSelectDetail: (item: RegistrationListItem) => void;
   onCancel: (item: RegistrationListItem) => void;
   onConfirmPayment: (item: RegistrationListItem) => void;
+  onExtendReservation: (item: RegistrationListItem) => void;
 }) {
   return (
     <tr className="border-b border-app-border last:border-0 hover:bg-app-surface-elevated/40">
@@ -845,6 +1023,7 @@ function RegistrationRow({
           onSelectDetail={onSelectDetail}
           onCancel={onCancel}
           onConfirmPayment={onConfirmPayment}
+          onExtendReservation={onExtendReservation}
         />
       </td>
     </tr>
@@ -858,6 +1037,7 @@ function RegistrationActionsDropdown({
   onSelectDetail,
   onCancel,
   onConfirmPayment,
+  onExtendReservation,
 }: {
   item: RegistrationListItem;
   canCancel: boolean;
@@ -865,6 +1045,7 @@ function RegistrationActionsDropdown({
   onSelectDetail: (item: RegistrationListItem) => void;
   onCancel: (item: RegistrationListItem) => void;
   onConfirmPayment: (item: RegistrationListItem) => void;
+  onExtendReservation: (item: RegistrationListItem) => void;
 }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -896,6 +1077,16 @@ function RegistrationActionsDropdown({
     canManage &&
     (item.status === "aguardando_pagamento" || item.status === "pendente");
   const canCancelRegistration = canCancel && item.status !== "cancelada";
+  const isReservationExpired =
+    item.status === "cancelada" &&
+    (item.cancellationReason === "Reserva expirada" ||
+      Boolean(item.cancellationReason?.toLowerCase().includes("expirad")) ||
+      item.payment?.status === "expirado");
+  const canExtendReservation =
+    canManage &&
+    (item.status === "aguardando_pagamento" ||
+      item.status === "pendente" ||
+      isReservationExpired);
 
   return (
     <div ref={dropdownRef} className="relative inline-block text-left">
@@ -953,6 +1144,21 @@ function RegistrationActionsDropdown({
             </button>
           ) : null}
 
+          {canExtendReservation ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onExtendReservation(item);
+              }}
+              className="flex w-full items-center gap-2 rounded-app-sm px-2.5 py-2 text-left text-xs font-medium text-app-warning transition-colors hover:bg-app-warning/10"
+            >
+              <Clock className="h-3.5 w-3.5 text-app-warning" aria-hidden="true" />
+              Estender reserva
+            </button>
+          ) : null}
+
           {canCancelRegistration ? (
             <button
               type="button"
@@ -980,6 +1186,7 @@ function RegistrationDetailModal({
   onClose,
   onRequestCancel,
   onRequestConfirmPayment,
+  onRequestExtendReservation,
 }: {
   item: RegistrationListItem | null;
   canCancel: boolean;
@@ -987,8 +1194,24 @@ function RegistrationDetailModal({
   onClose: () => void;
   onRequestCancel: (item: RegistrationListItem) => void;
   onRequestConfirmPayment: (item: RegistrationListItem) => void;
+  onRequestExtendReservation: (item: RegistrationListItem) => void;
 }) {
   if (!item) return null;
+
+  const canConfirmManual =
+    canManage &&
+    (item.status === "aguardando_pagamento" || item.status === "pendente");
+  const isReservationExpired =
+    item.status === "cancelada" &&
+    (item.cancellationReason === "Reserva expirada" ||
+      Boolean(item.cancellationReason?.toLowerCase().includes("expirad")) ||
+      item.payment?.status === "expirado");
+  const canExtendReservation =
+    canManage &&
+    (item.status === "aguardando_pagamento" ||
+      item.status === "pendente" ||
+      isReservationExpired);
+  const canCancelRegistration = canCancel && item.status !== "cancelada";
 
   return (
     <Dialog
@@ -1337,9 +1560,7 @@ function RegistrationDetailModal({
         {/* Rodapé de ações */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-app-border pt-3">
           <div className="flex flex-wrap items-center gap-2">
-            {canManage &&
-            (item.status === "aguardando_pagamento" ||
-              item.status === "pendente") ? (
+            {canConfirmManual ? (
               <Button
                 type="button"
                 variant="primary"
@@ -1349,7 +1570,17 @@ function RegistrationDetailModal({
                 Confirmar pagamento
               </Button>
             ) : null}
-            {canCancel && item.status !== "cancelada" ? (
+            {canExtendReservation ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => onRequestExtendReservation(item)}
+              >
+                <Clock className="h-4 w-4 text-app-warning" aria-hidden="true" />
+                Estender reserva
+              </Button>
+            ) : null}
+            {canCancelRegistration ? (
               <Button
                 type="button"
                 variant="danger"

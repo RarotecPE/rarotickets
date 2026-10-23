@@ -212,6 +212,22 @@ export type RegistrationListResult = { items: RegistrationListItem[]; total: num
 export type RegistrationEventAccessParams = { eventId: string; userId: string; canViewAll: boolean };
 export type CancelRegistrationParams = { registrationId: string; reason: string; actorId: string; at: Date; canManageAll: boolean };
 export type ConfirmManualPaymentParams = { registrationId: string; actorId: string; at: Date; canManageAll: boolean };
+export type ExtendReservationParams = {
+  registrationId: string;
+  expiresAt: Date;
+  actorId: string;
+  canManageAll: boolean;
+  at: Date;
+};
+export type ExtendReservationResult = {
+  registrationId: string;
+  registrationCode: string;
+  status: RegistrationStatus;
+  previousExpiresAt: Date | null;
+  newExpiresAt: Date;
+  eventId: string;
+  participantName: string;
+};
 export type ConfirmManualPaymentResult = {
   registrationId: string;
   registrationCode: string;
@@ -271,6 +287,7 @@ export interface IRegistrationRepository extends IWaitlistPromotionRepository {
   list(params: ListRegistrationsParams): Promise<RegistrationListResult>;
   cancel(params: CancelRegistrationParams): Promise<CancelRegistrationResult | null>;
   confirmManualPayment(params: ConfirmManualPaymentParams): Promise<ConfirmManualPaymentResult | null>;
+  extendReservation(params: ExtendReservationParams): Promise<Result<ExtendReservationResult, DomainError>>;
   findNextWaitlisted(params: FindNextWaitlistedParams): Promise<WaitlistCandidate | null>;
   promoteNextWaitlisted(params: PromoteNextWaitlistedParams): Promise<WaitlistPromotionResult | null>;
   listWaitlistedEventIds(): Promise<string[]>;
@@ -290,6 +307,7 @@ export abstract class RegistrationRepository implements IRegistrationRepository 
   abstract list(params: ListRegistrationsParams): Promise<RegistrationListResult>;
   abstract cancel(params: CancelRegistrationParams): Promise<CancelRegistrationResult | null>;
   abstract confirmManualPayment(params: ConfirmManualPaymentParams): Promise<ConfirmManualPaymentResult | null>;
+  abstract extendReservation(params: ExtendReservationParams): Promise<Result<ExtendReservationResult, DomainError>>;
   abstract findNextWaitlisted(params: FindNextWaitlistedParams): Promise<WaitlistCandidate | null>;
   abstract promoteNextWaitlisted(params: PromoteNextWaitlistedParams): Promise<WaitlistPromotionResult | null>;
   abstract listWaitlistedEventIds(): Promise<string[]>;

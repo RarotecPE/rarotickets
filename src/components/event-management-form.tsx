@@ -2819,32 +2819,78 @@ function validateEventDraft(
               }
             }
 
-            const allowedEmails = coupon.allowedEmailsText
+            const rawEmailTokens = coupon.allowedEmailsText
               ? coupon.allowedEmailsText
-                  .split(/[\n,;]+/)
+                  .split(/[\r\n,;]+/)
+                  .flatMap((entry) => entry.trim().split(/\s+/))
                   .map((e) => e.trim().toLowerCase())
                   .filter(Boolean)
               : [];
-            for (const email of allowedEmails) {
+            const invalidEmails: string[] = [];
+            const validEmailsList: string[] = [];
+            const seenInvalidEmails = new Set<string>();
+            for (const email of rawEmailTokens) {
               if (Email.create(email).isFailure) {
-                errors[`lots.${lotIndex}.coupons.${couponIndex}.allowedEmailsText`] =
-                  `E-mail inválido: “${email}”.`;
-                break;
+                if (!seenInvalidEmails.has(email)) {
+                  seenInvalidEmails.add(email);
+                  invalidEmails.push(email);
+                }
+              } else if (!validEmailsList.includes(email)) {
+                validEmailsList.push(email);
+              }
+            }
+            if (invalidEmails.length > 0) {
+              errors[`lots.${lotIndex}.coupons.${couponIndex}.allowedEmailsText`] =
+                invalidEmails.length === 1
+                  ? `E-mail inválido: “${invalidEmails[0]}”.`
+                  : `E-mails inválidos: ${invalidEmails.map((e) => `“${e}”`).join(", ")}.`;
+            }
+
+            const rawCpfTokens = coupon.allowedCpfsText
+              ? coupon.allowedCpfsText
+                  .split(/[\r\n,;]+/)
+                  .flatMap((entry) => entry.trim().split(/\s+/))
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+              : [];
+
+            const invalidCpfs: Array<{ token: string; reason: string }> = [];
+            const validCpfsList: string[] = [];
+            const seenInvalidCpfTokens = new Set<string>();
+
+            for (const rawToken of rawCpfTokens) {
+              const digits = rawToken.replace(/\D/g, "");
+              if (digits.length !== 11) {
+                if (!seenInvalidCpfTokens.has(rawToken)) {
+                  seenInvalidCpfTokens.add(rawToken);
+                  invalidCpfs.push({
+                    token: rawToken,
+                    reason: `deve conter 11 dígitos, possui ${digits.length}`,
+                  });
+                }
+                continue;
+              }
+              const cpfValidation = Cpf.create(digits);
+              if (cpfValidation.isFailure) {
+                if (!seenInvalidCpfTokens.has(rawToken)) {
+                  seenInvalidCpfTokens.add(rawToken);
+                  invalidCpfs.push({
+                    token: rawToken,
+                    reason: "dígito verificador inválido",
+                  });
+                }
+                continue;
+              }
+              if (!validCpfsList.includes(cpfValidation.value.digits)) {
+                validCpfsList.push(cpfValidation.value.digits);
               }
             }
 
-            const allowedCpfs = coupon.allowedCpfsText
-              ? coupon.allowedCpfsText
-                  .split(/[\n,;]+/)
-                  .map((c) => c.replace(/\D/g, ""))
-                  .filter(Boolean)
-              : [];
-            for (const cpf of allowedCpfs) {
-              if (Cpf.create(cpf).isFailure) {
-                errors[`lots.${lotIndex}.coupons.${couponIndex}.allowedCpfsText`] =
-                  `CPF inválido: “${cpf}”. Deve conter 11 dígitos.`;
-                break;
-              }
+            if (invalidCpfs.length > 0) {
+              errors[`lots.${lotIndex}.coupons.${couponIndex}.allowedCpfsText`] =
+                invalidCpfs.length === 1
+                  ? `CPF inválido: “${invalidCpfs[0].token}” (${invalidCpfs[0].reason}).`
+                  : `CPFs inválidos: ${invalidCpfs.map((item) => `“${item.token}” (${item.reason})`).join(", ")}.`;
             }
 
             return {
@@ -2856,8 +2902,8 @@ function validateEventDraft(
               startAt: couponStart ?? new Date(),
               endAt: couponEnd ?? new Date(),
               active: coupon.active,
-              allowedEmails,
-              allowedCpfs,
+              allowedEmails: validEmailsList,
+              allowedCpfs: validCpfsList,
             };
           });
 

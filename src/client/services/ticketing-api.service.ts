@@ -317,6 +317,31 @@ export class TicketingApiService extends ApiService {
       })
     ).data;
   }
+  async extendRegistrationReservation(params: {
+    registrationId: string;
+    expiresAt: Date | string;
+  }): Promise<{
+    registrationCode: string;
+    status: string;
+    reservationExpiresAt: string;
+  }> {
+    return (
+      await this.httpClient.request<{
+        registrationCode: string;
+        status: string;
+        reservationExpiresAt: string;
+      }>({
+        path: `/api/v1/admin/registrations/${encodeURIComponent(params.registrationId)}/extend-reservation`,
+        method: "POST",
+        body: {
+          expiresAt:
+            params.expiresAt instanceof Date
+              ? params.expiresAt.toISOString()
+              : params.expiresAt,
+        },
+      })
+    ).data;
+  }
   async checkIn(params: {
     qrToken: string;
     reentry: boolean;

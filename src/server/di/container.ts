@@ -10,6 +10,7 @@ import { CreateEventUseCase } from "@/modules/ticketing/application/use-cases/cr
 import { UploadEventBannerUseCase } from "@/modules/ticketing/application/use-cases/upload-event-banner/upload-event-banner.use-case";
 import { UploadEventPixQrUseCase } from "@/modules/ticketing/application/use-cases/upload-event-pix-qr/upload-event-pix-qr.use-case";
 import { ConfirmManualPaymentUseCase } from "@/modules/ticketing/application/use-cases/confirm-manual-payment/confirm-manual-payment.use-case";
+import { ExtendRegistrationReservationUseCase } from "@/modules/ticketing/application/use-cases/extend-registration-reservation/extend-registration-reservation.use-case";
 import { CreatePublicRegistrationUseCase } from "@/modules/ticketing/application/use-cases/create-public-registration/create-public-registration.use-case";
 import { GetPrivateRegistrationFileUseCase } from "@/modules/ticketing/application/use-cases/get-private-registration-file/get-private-registration-file.use-case";
 import { GetPublicFileUseCase } from "@/modules/ticketing/application/use-cases/get-public-file/get-public-file.use-case";
@@ -77,6 +78,7 @@ export type TicketingContainer = {
   listRegistrations: ListRegistrationsUseCase;
   cancelRegistration: CancelRegistrationUseCase;
   confirmManualPayment: ConfirmManualPaymentUseCase;
+  extendRegistrationReservation: ExtendRegistrationReservationUseCase;
   processPaymentWebhook: ProcessPaymentWebhookUseCase;
   checkIn: CheckInUseCase;
   getDashboard: GetDashboardUseCase;
@@ -267,6 +269,10 @@ export function createTicketingContainer(): TicketingContainer {
       outboxRepository,
       emailSender: participantEmailSender,
       publicBaseUrl: environment.appBaseUrl,
+    }),
+    extendRegistrationReservation: new ExtendRegistrationReservationUseCase({
+      registrationRepository,
+      auditRepository,
     }),
     processPaymentWebhook,
     checkIn: new CheckInUseCase({

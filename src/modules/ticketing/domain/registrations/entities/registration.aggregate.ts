@@ -49,6 +49,10 @@ export type PromoteFromWaitlistParams = {
   at: Date;
   deadline: Date;
 };
+export type ExtendRegistrationReservationParams = {
+  newExpiresAt: Date;
+  at: Date;
+};
 export type CreateRegistrationParams = RegistrationConstructorParams;
 
 export class RegistrationRuleError extends DomainError {
@@ -232,6 +236,44 @@ export class Registration extends AggregateRoot<RegistrationProps> {
       this.props.waitlistExpiresAt = null;
       this.props.confirmedAt = null;
     }
+    this.touch({ at: params.at });
+    return Result.ok(this);
+  }
+
+  extendReservation(
+    params: ExtendRegistrationReservationParams,
+  ): Result<Registration, RegistrationRuleError> {
+    if (params.newExpiresAt <= params.at) {
+      return Result.fail(
+        new RegistrationRuleError({
+          code: "INVALID_RESERVATION_EXPIRY",
+          message: "A nova data de expiração da reserva precisa estar no futuro.",
+        }),
+      );
+    }
+    const isPendingOrAwaiting =
+      this.props.status === "aguardando_pagamento" ||
+      this.props.status === "pendente";
+    const isExpiredCancelled =
+      this.props.status === "cancelada" &&
+      (this.props.cancellationReason === "Reserva expirada" ||
+        Boolean(this.props.cancellationReason?.toLowerCase().includes("expirad")));
+
+    if (!isPendingOrAwaiting && !isExpiredCancelled) {
+      return Result.fail(
+        new RegistrationRuleError({
+          code: "CANNOT_EXTEND_RESERVATION",
+          message:
+            "Apenas inscrições aguardando pagamento ou com reserva expirada podem ter o prazo estendido.",
+        }),
+      );
+    }
+
+    if (this.props.status === "cancelada") {
+      this.props.status = "aguardando_pagamento";
+      this.props.cancellationReason = null;
+    }
+    this.props.reservationExpiresAt = params.newExpiresAt;
     this.touch({ at: params.at });
     return Result.ok(this);
   }
