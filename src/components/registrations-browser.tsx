@@ -16,6 +16,7 @@ import {
   Download,
   Eye,
   FileText,
+  ScanLine,
   Search,
   User,
   X,
@@ -40,6 +41,7 @@ import type { Tone } from "@/lib/constants";
 import type { EventReadModel } from "@/modules/ticketing/domain/events/repositories/event-repository.interface";
 import type {
   RegistrationAnswerDetail,
+  RegistrationCheckInDetail,
   RegistrationListItem,
   RegistrationListResult,
 } from "@/modules/ticketing/domain/registrations/repositories/registration-repository.interface";
@@ -111,11 +113,29 @@ export function RegistrationsBrowser() {
   const [extendExpiresAt, setExtendExpiresAt] = useState<string>("");
   const [extendError, setExtendError] = useState<string | null>(null);
   const [extending, setExtending] = useState(false);
+  const [cancelCheckInTarget, setCancelCheckInTarget] = useState<{
+    registration: RegistrationListItem;
+    checkIn: RegistrationCheckInDetail;
+  } | null>(null);
+  const [cancelCheckInReason, setCancelCheckInReason] = useState("");
+  const [cancelCheckInError, setCancelCheckInError] = useState<string | null>(
+    null,
+  );
+  const [cancellingCheckIn, setCancellingCheckIn] = useState(false);
+  const [performCheckInTarget, setPerformCheckInTarget] =
+    useState<RegistrationListItem | null>(null);
+  const [performingCheckIn, setPerformingCheckIn] = useState(false);
+  const [performCheckInError, setPerformCheckInError] = useState<string | null>(
+    null,
+  );
   const canCancel = Boolean(
     auth.session?.permissions.includes("registrations:cancel"),
   );
   const canManage = Boolean(
     auth.session?.permissions.includes("registrations:manage"),
+  );
+  const canCheckIn = Boolean(
+    auth.session?.permissions.includes("checkin:write"),
   );
   const pageCount = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
 
@@ -369,6 +389,139 @@ export function RegistrationsBrowser() {
     }
   }
 
+  function openCancelCheckInDialog(
+    registration: RegistrationListItem,
+    checkIn?: RegistrationCheckInDetail,
+  ): void {
+    const targetCheckIn =
+      checkIn ??
+      registration.checkIns[registration.checkIns.length - 1] ?? {
+        id: "",
+        type: "normal" as const,
+        happenedAt: registration.checkInAt ?? new Date(),
+        operatorName: registration.checkInBy ?? "Portaria",
+        justification: null,
+      };
+    setCancelCheckInTarget({ registration, checkIn: targetCheckIn });
+    setCancelCheckInReason("");
+    setCancelCheckInError(null);
+  }
+
+  function closeCancelCheckInDialog(): void {
+    if (!cancellingCheckIn) {
+      setCancelCheckInTarget(null);
+      setCancelCheckInReason("");
+      setCancelCheckInError(null);
+    }
+  }
+
+  async function submitCancelCheckIn(): Promise<void> {
+    if (!cancelCheckInTarget) return;
+    setCancellingCheckIn(true);
+    setCancelCheckInError(null);
+    try {
+      const res = await ticketingApi.cancelCheckIn({
+        registrationId: cancelCheckInTarget.registration.id,
+        checkInId: cancelCheckInTarget.checkIn.id || undefined,
+        reason: cancelCheckInReason.trim() || undefined,
+      });
+
+      setNotice(
+        `Check-in da inscrição ${res.registrationCode} cancelado com sucesso.`,
+      );
+      setCancelCheckInTarget(null);
+
+      if (detailTarget?.id === cancelCheckInTarget.registration.id) {
+        setDetailTarget((prev) => {
+          if (!prev) return null;
+          const targetId =
+            cancelCheckInTarget.checkIn.id || res.cancelledCheckInId;
+          const updatedCheckIns = prev.checkIns.filter(
+            (c) => c.id !== targetId,
+          );
+          const remainingNormal = updatedCheckIns.find(
+            (c) => c.type === "normal",
+          );
+          return {
+            ...prev,
+            checkIns: updatedCheckIns,
+            checkInAt: remainingNormal?.happenedAt ?? null,
+            checkInBy: remainingNormal?.operatorName ?? null,
+          };
+        });
+      }
+
+      setLoading(true);
+      setReloadVersion((current) => current + 1);
+    } catch (caught) {
+      setCancelCheckInError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível cancelar o check-in.",
+      );
+    } finally {
+      setCancellingCheckIn(false);
+    }
+  }
+
+  function openPerformCheckInDialog(registration: RegistrationListItem): void {
+    setPerformCheckInTarget(registration);
+    setPerformCheckInError(null);
+  }
+
+  function closePerformCheckInDialog(): void {
+    if (!performingCheckIn) {
+      setPerformCheckInTarget(null);
+      setPerformCheckInError(null);
+    }
+  }
+
+  async function submitPerformCheckIn(): Promise<void> {
+    if (!performCheckInTarget) return;
+    setPerformingCheckIn(true);
+    setPerformCheckInError(null);
+    try {
+      const res = await ticketingApi.checkIn({
+        registrationCode: performCheckInTarget.code,
+      });
+
+      setNotice(
+        `Check-in da inscrição ${res.registrationCode} (${res.participantName}) realizado com sucesso!`,
+      );
+      setPerformCheckInTarget(null);
+
+      if (detailTarget?.id === performCheckInTarget.id) {
+        setDetailTarget((prev) => {
+          if (!prev) return null;
+          const newCheckIn: RegistrationCheckInDetail = {
+            id: "",
+            type: "normal",
+            happenedAt: new Date(res.happenedAt),
+            operatorName: res.operatorName,
+            justification: null,
+          };
+          return {
+            ...prev,
+            checkIns: [newCheckIn, ...prev.checkIns],
+            checkInAt: new Date(res.happenedAt),
+            checkInBy: res.operatorName,
+          };
+        });
+      }
+
+      setLoading(true);
+      setReloadVersion((current) => current + 1);
+    } catch (caught) {
+      setPerformCheckInError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível realizar o check-in.",
+      );
+    } finally {
+      setPerformingCheckIn(false);
+    }
+  }
+
   const selectedEventsLabel =
     eventIds.length === 0
       ? "Todos os eventos"
@@ -604,10 +757,13 @@ export function RegistrationsBrowser() {
           items={result.items}
           canCancel={canCancel}
           canManage={canManage}
+          canCheckIn={canCheckIn}
           onSelectDetail={setDetailTarget}
           onCancel={setCancelTarget}
           onConfirmPayment={setConfirmPaymentTarget}
           onExtendReservation={openExtendDialog}
+          onRequestCancelCheckIn={(reg) => openCancelCheckInDialog(reg)}
+          onRequestPerformCheckIn={(reg) => openPerformCheckInDialog(reg)}
         />
       ) : (
         <Panel>
@@ -662,6 +818,7 @@ export function RegistrationsBrowser() {
         item={detailTarget}
         canCancel={canCancel}
         canManage={canManage}
+        canCheckIn={canCheckIn}
         onClose={() => setDetailTarget(null)}
         onRequestCancel={(item) => {
           setDetailTarget(null);
@@ -673,7 +830,78 @@ export function RegistrationsBrowser() {
         onRequestExtendReservation={(item) => {
           openExtendDialog(item);
         }}
+        onRequestCancelCheckIn={(item, checkIn) => {
+          openCancelCheckInDialog(item, checkIn);
+        }}
+        onRequestPerformCheckIn={(item) => {
+          openPerformCheckInDialog(item);
+        }}
       />
+
+      <Dialog
+        open={Boolean(performCheckInTarget)}
+        onClose={closePerformCheckInDialog}
+        title="Realizar check-in"
+        description={
+          performCheckInTarget
+            ? `Confirme a realização do credenciamento para ${performCheckInTarget.participantName} (${performCheckInTarget.code}).`
+            : undefined
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <InlineAlert tone="info">
+            O check-in confirma a presença física do participante no evento e permite a posterior emissão do certificado.
+          </InlineAlert>
+
+          {performCheckInTarget ? (
+            <div className="rounded-app-md border border-app-border bg-app-surface-elevated/40 p-3 text-xs space-y-1.5">
+              <div>
+                <span className="font-semibold text-app-foreground">Código da inscrição: </span>
+                <span className="font-mono text-app-foreground">{performCheckInTarget.code}</span>
+              </div>
+              <div>
+                <span className="font-semibold text-app-foreground">Participante: </span>
+                <span className="text-app-foreground">{performCheckInTarget.participantName}</span>
+              </div>
+              <div>
+                <span className="font-semibold text-app-foreground">Evento: </span>
+                <span className="text-app-foreground">{performCheckInTarget.eventTitle}</span>
+              </div>
+            </div>
+          ) : null}
+
+          {performCheckInError ? (
+            <InlineAlert tone="danger">{performCheckInError}</InlineAlert>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={performingCheckIn}
+              onClick={closePerformCheckInDialog}
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={performingCheckIn}
+              onClick={() => void submitPerformCheckIn()}
+            >
+              {performingCheckIn ? (
+                "Registrando…"
+              ) : (
+                <>
+                  <ScanLine className="h-4 w-4" aria-hidden="true" />
+                  Confirmar check-in
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       <Dialog
         open={Boolean(confirmPaymentTarget)}
@@ -827,6 +1055,106 @@ export function RegistrationsBrowser() {
       </Dialog>
 
       <Dialog
+        open={Boolean(cancelCheckInTarget)}
+        onClose={closeCancelCheckInDialog}
+        title="Cancelar check-in"
+        description={
+          cancelCheckInTarget
+            ? `Confirme o cancelamento do check-in de ${cancelCheckInTarget.registration.participantName} (${cancelCheckInTarget.registration.code}).`
+            : undefined
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <InlineAlert tone="danger">
+            Ao cancelar o check-in, o registro de entrada na portaria será removido. O participante precisará se credenciar novamente para acessar o evento.
+          </InlineAlert>
+
+          {cancelCheckInTarget ? (
+            <div className="rounded-app-md border border-app-border bg-app-surface-elevated/40 p-3 text-xs space-y-1.5">
+              <div>
+                <span className="font-semibold text-app-foreground">Tipo de check-in: </span>
+                <span className="text-app-foreground">
+                  {cancelCheckInTarget.checkIn.type === "reentrada_autorizada"
+                    ? "Reentrada autorizada"
+                    : "Check-in na portaria"}
+                </span>
+              </div>
+              <div>
+                <span className="font-semibold text-app-foreground">Data/Hora: </span>
+                <span className="font-mono text-app-muted-foreground">
+                  {formatDate({
+                    value: cancelCheckInTarget.checkIn.happenedAt,
+                    withTime: true,
+                  })}
+                </span>
+              </div>
+              <div>
+                <span className="font-semibold text-app-foreground">Operador responsável: </span>
+                <span className="text-app-muted-foreground">
+                  {cancelCheckInTarget.checkIn.operatorName}
+                </span>
+              </div>
+              {cancelCheckInTarget.checkIn.justification ? (
+                <div>
+                  <span className="font-semibold text-app-foreground">Justificativa original: </span>
+                  <span className="text-app-muted-foreground">
+                    {cancelCheckInTarget.checkIn.justification}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <Field
+            label="Motivo do cancelamento (opcional)"
+            htmlFor="cancel-checkin-reason"
+            hint="O motivo será registrado na trilha de auditoria do sistema."
+          >
+            <input
+              id="cancel-checkin-reason"
+              type="text"
+              value={cancelCheckInReason}
+              onChange={(e) => setCancelCheckInReason(e.target.value)}
+              placeholder="Ex: Leitura indevida de QR Code na portaria"
+              className={inputCls}
+              disabled={cancellingCheckIn}
+            />
+          </Field>
+
+          {cancelCheckInError ? (
+            <InlineAlert tone="danger">{cancelCheckInError}</InlineAlert>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={cancellingCheckIn}
+              onClick={closeCancelCheckInDialog}
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              disabled={cancellingCheckIn}
+              onClick={() => void submitCancelCheckIn()}
+            >
+              {cancellingCheckIn ? (
+                "Cancelando…"
+              ) : (
+                <>
+                  <Ban className="h-4 w-4" aria-hidden="true" />
+                  Confirmar cancelamento
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
         open={Boolean(cancelTarget)}
         onClose={closeCancelDialog}
         title="Cancelar inscrição"
@@ -885,18 +1213,24 @@ function RegistrationTable({
   items,
   canCancel,
   canManage,
+  canCheckIn,
   onSelectDetail,
   onCancel,
   onConfirmPayment,
   onExtendReservation,
+  onRequestCancelCheckIn,
+  onRequestPerformCheckIn,
 }: {
   items: RegistrationListItem[];
   canCancel: boolean;
   canManage: boolean;
+  canCheckIn?: boolean;
   onSelectDetail: (item: RegistrationListItem) => void;
   onCancel: (item: RegistrationListItem) => void;
   onConfirmPayment: (item: RegistrationListItem) => void;
   onExtendReservation: (item: RegistrationListItem) => void;
+  onRequestCancelCheckIn?: (item: RegistrationListItem) => void;
+  onRequestPerformCheckIn?: (item: RegistrationListItem) => void;
 }) {
   return (
     <Panel>
@@ -939,10 +1273,13 @@ function RegistrationTable({
                 item={item}
                 canCancel={canCancel}
                 canManage={canManage}
+                canCheckIn={canCheckIn}
                 onSelectDetail={onSelectDetail}
                 onCancel={onCancel}
                 onConfirmPayment={onConfirmPayment}
                 onExtendReservation={onExtendReservation}
+                onRequestCancelCheckIn={onRequestCancelCheckIn}
+                onRequestPerformCheckIn={onRequestPerformCheckIn}
               />
             ))}
           </tbody>
@@ -956,18 +1293,24 @@ function RegistrationRow({
   item,
   canCancel,
   canManage,
+  canCheckIn,
   onSelectDetail,
   onCancel,
   onConfirmPayment,
   onExtendReservation,
+  onRequestCancelCheckIn,
+  onRequestPerformCheckIn,
 }: {
   item: RegistrationListItem;
   canCancel: boolean;
   canManage: boolean;
+  canCheckIn?: boolean;
   onSelectDetail: (item: RegistrationListItem) => void;
   onCancel: (item: RegistrationListItem) => void;
   onConfirmPayment: (item: RegistrationListItem) => void;
   onExtendReservation: (item: RegistrationListItem) => void;
+  onRequestCancelCheckIn?: (item: RegistrationListItem) => void;
+  onRequestPerformCheckIn?: (item: RegistrationListItem) => void;
 }) {
   return (
     <tr className="border-b border-app-border last:border-0 hover:bg-app-surface-elevated/40">
@@ -1020,10 +1363,13 @@ function RegistrationRow({
           item={item}
           canCancel={canCancel}
           canManage={canManage}
+          canCheckIn={canCheckIn}
           onSelectDetail={onSelectDetail}
           onCancel={onCancel}
           onConfirmPayment={onConfirmPayment}
           onExtendReservation={onExtendReservation}
+          onRequestCancelCheckIn={onRequestCancelCheckIn}
+          onRequestPerformCheckIn={onRequestPerformCheckIn}
         />
       </td>
     </tr>
@@ -1034,18 +1380,24 @@ function RegistrationActionsDropdown({
   item,
   canCancel,
   canManage,
+  canCheckIn,
   onSelectDetail,
   onCancel,
   onConfirmPayment,
   onExtendReservation,
+  onRequestCancelCheckIn,
+  onRequestPerformCheckIn,
 }: {
   item: RegistrationListItem;
   canCancel: boolean;
   canManage: boolean;
+  canCheckIn?: boolean;
   onSelectDetail: (item: RegistrationListItem) => void;
   onCancel: (item: RegistrationListItem) => void;
   onConfirmPayment: (item: RegistrationListItem) => void;
   onExtendReservation: (item: RegistrationListItem) => void;
+  onRequestCancelCheckIn?: (item: RegistrationListItem) => void;
+  onRequestPerformCheckIn?: (item: RegistrationListItem) => void;
 }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -1087,6 +1439,15 @@ function RegistrationActionsDropdown({
     (item.status === "aguardando_pagamento" ||
       item.status === "pendente" ||
       isReservationExpired);
+  const canCancelCheckIn =
+    canManage &&
+    item.status === "confirmada" &&
+    (item.checkInAt !== null || item.checkIns.length > 0);
+  const canPerformCheckIn =
+    Boolean(canCheckIn) &&
+    item.status === "confirmada" &&
+    item.checkInAt === null &&
+    item.checkIns.length === 0;
 
   return (
     <div ref={dropdownRef} className="relative inline-block text-left">
@@ -1159,6 +1520,36 @@ function RegistrationActionsDropdown({
             </button>
           ) : null}
 
+          {canPerformCheckIn && onRequestPerformCheckIn ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onRequestPerformCheckIn(item);
+              }}
+              className="flex w-full items-center gap-2 rounded-app-sm px-2.5 py-2 text-left text-xs font-medium text-app-success transition-colors hover:bg-app-success/10"
+            >
+              <ScanLine className="h-3.5 w-3.5 text-app-success" aria-hidden="true" />
+              Realizar check-in
+            </button>
+          ) : null}
+
+          {canCancelCheckIn && onRequestCancelCheckIn ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onRequestCancelCheckIn(item);
+              }}
+              className="flex w-full items-center gap-2 rounded-app-sm px-2.5 py-2 text-left text-xs font-medium text-app-danger transition-colors hover:bg-app-danger/10"
+            >
+              <Ban className="h-3.5 w-3.5 text-app-danger" aria-hidden="true" />
+              Cancelar check-in
+            </button>
+          ) : null}
+
           {canCancelRegistration ? (
             <button
               type="button"
@@ -1183,18 +1574,27 @@ function RegistrationDetailModal({
   item,
   canCancel,
   canManage,
+  canCheckIn,
   onClose,
   onRequestCancel,
   onRequestConfirmPayment,
   onRequestExtendReservation,
+  onRequestCancelCheckIn,
+  onRequestPerformCheckIn,
 }: {
   item: RegistrationListItem | null;
   canCancel: boolean;
   canManage: boolean;
+  canCheckIn?: boolean;
   onClose: () => void;
   onRequestCancel: (item: RegistrationListItem) => void;
   onRequestConfirmPayment: (item: RegistrationListItem) => void;
   onRequestExtendReservation: (item: RegistrationListItem) => void;
+  onRequestCancelCheckIn: (
+    item: RegistrationListItem,
+    checkIn: RegistrationCheckInDetail,
+  ) => void;
+  onRequestPerformCheckIn?: (item: RegistrationListItem) => void;
 }) {
   if (!item) return null;
 
@@ -1212,6 +1612,15 @@ function RegistrationDetailModal({
       item.status === "pendente" ||
       isReservationExpired);
   const canCancelRegistration = canCancel && item.status !== "cancelada";
+  const canCancelCheckIn =
+    canManage &&
+    item.status === "confirmada" &&
+    (item.checkInAt !== null || item.checkIns.length > 0);
+  const canPerformCheckIn =
+    Boolean(canCheckIn) &&
+    item.status === "confirmada" &&
+    item.checkInAt === null &&
+    item.checkIns.length === 0;
 
   return (
     <Dialog
@@ -1485,9 +1894,71 @@ function RegistrationDetailModal({
           </div>
           <div className="space-y-3 pt-1">
             {item.checkIns.length === 0 ? (
-              <p className="text-xs text-app-muted-foreground">
-                Nenhum check-in registrado na portaria até o momento.
-              </p>
+              item.checkInAt ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-app-md border border-app-border bg-app-surface-elevated/40 px-3 py-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2
+                      className="h-4 w-4 shrink-0 text-app-success"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <span className="font-semibold text-app-foreground">
+                        Check-in na portaria
+                      </span>
+                      {item.checkInBy ? (
+                        <span className="text-app-muted-foreground">
+                          {" "}
+                          · Operador: {item.checkInBy}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="font-mono text-app-muted-foreground">
+                      {formatDate({ value: item.checkInAt, withTime: true })}
+                    </span>
+                    {canManage && item.status === "confirmada" ? (
+                      <Button
+                        type="button"
+                        variant="danger"
+                        compact
+                        onClick={() =>
+                          onRequestCancelCheckIn(item, {
+                            id: "",
+                            type: "normal",
+                            happenedAt: item.checkInAt!,
+                            operatorName: item.checkInBy ?? "Portaria",
+                            justification: null,
+                          })
+                        }
+                        title="Cancelar este check-in"
+                        className="gap-1 px-2.5 py-1 text-xs"
+                      >
+                        <Ban className="h-3 w-3" aria-hidden="true" />
+                        Cancelar check-in
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-app-muted-foreground">
+                    Nenhum check-in registrado na portaria até o momento.
+                  </p>
+                  {canPerformCheckIn && onRequestPerformCheckIn ? (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      compact
+                      onClick={() => onRequestPerformCheckIn(item)}
+                      className="gap-1 px-2.5 py-1 text-xs"
+                    >
+                      <ScanLine className="h-3.5 w-3.5" aria-hidden="true" />
+                      Realizar check-in
+                    </Button>
+                  ) : null}
+                </div>
+              )
             ) : (
               <div className="space-y-2">
                 {item.checkIns.map((ci) => (
@@ -1517,9 +1988,24 @@ function RegistrationDetailModal({
                         ) : null}
                       </div>
                     </div>
-                    <span className="font-mono text-app-muted-foreground">
-                      {formatDate({ value: ci.happenedAt, withTime: true })}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="font-mono text-app-muted-foreground">
+                        {formatDate({ value: ci.happenedAt, withTime: true })}
+                      </span>
+                      {canManage && item.status === "confirmada" ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          compact
+                          onClick={() => onRequestCancelCheckIn(item, ci)}
+                          title="Cancelar este check-in"
+                          className="gap-1 px-2.5 py-1 text-xs"
+                        >
+                          <Ban className="h-3 w-3" aria-hidden="true" />
+                          Cancelar check-in
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1578,6 +2064,36 @@ function RegistrationDetailModal({
               >
                 <Clock className="h-4 w-4 text-app-warning" aria-hidden="true" />
                 Estender reserva
+              </Button>
+            ) : null}
+            {canPerformCheckIn && onRequestPerformCheckIn ? (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => onRequestPerformCheckIn(item)}
+              >
+                <ScanLine className="h-4 w-4" aria-hidden="true" />
+                Realizar check-in
+              </Button>
+            ) : null}
+            {canCancelCheckIn ? (
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  const targetCi =
+                    item.checkIns[item.checkIns.length - 1] ?? {
+                      id: "",
+                      type: "normal" as const,
+                      happenedAt: item.checkInAt ?? new Date(),
+                      operatorName: item.checkInBy ?? "Portaria",
+                      justification: null,
+                    };
+                  onRequestCancelCheckIn(item, targetCi);
+                }}
+              >
+                <Ban className="h-4 w-4" aria-hidden="true" />
+                Cancelar check-in
               </Button>
             ) : null}
             {canCancelRegistration ? (

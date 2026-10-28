@@ -54,7 +54,7 @@ export function CheckInConsole() {
       setResult(null);
       const token = rawToken.trim();
       if (!token) {
-        setError("Escaneie ou informe o token do QR Code da credencial.");
+        setError("Informe o código da inscrição ou escaneie o QR Code da credencial.");
         return;
       }
       if (reentry && !justification.trim()) {
@@ -63,8 +63,10 @@ export function CheckInConsole() {
       }
       setProcessing(true);
       try {
+        const isQr = token.startsWith("RT1.");
         const response = await ticketingApi.checkIn({
-          qrToken: token,
+          qrToken: isQr ? token : undefined,
+          registrationCode: !isQr ? token : undefined,
           reentry,
           justification: reentry ? justification.trim() : undefined,
         });
@@ -117,15 +119,14 @@ export function CheckInConsole() {
           Credenciamento
         </h2>
         <p className="mt-1 text-xs text-app-muted-foreground">
-          Escaneie o QR Code da credencial ou use um leitor que digite o token
-          no campo abaixo.
+          Escaneie o QR Code da credencial ou informe o código de inscrição gerado e enviado por e-mail.
         </p>
       </div>
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(280px,.7fr)]">
         <Panel>
           <PanelHeader
             title="Validar credencial"
-            description="O servidor valida a assinatura do QR Code, a inscrição e a janela do evento."
+            description="O servidor valida o código da inscrição ou assinatura do QR Code e a janela do evento."
             right={
               <Badge tone="primary">
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
@@ -138,9 +139,9 @@ export function CheckInConsole() {
             className="flex flex-col gap-4 p-4 sm:p-5"
           >
             <Field
-              label="Token do QR Code *"
+              label="Código da Inscrição ou Token do QR Code *"
               htmlFor="checkin-qr-token"
-              hint="O leitor USB/Bluetooth funciona como teclado; também é possível usar a câmera ou colar o token da credencial."
+              hint="Digite o código da inscrição recebido por e-mail (ex: INS-2026-XXXX), use um leitor USB/Bluetooth ou abra a câmera."
             >
               <div className="flex gap-2">
                 <input
@@ -152,7 +153,7 @@ export function CheckInConsole() {
                     setError(null);
                   }}
                   className={inputCls}
-                  placeholder="RT1.…"
+                  placeholder="INS-2026-XXXX ou RT1.…"
                 />
                 <Button
                   type="button"

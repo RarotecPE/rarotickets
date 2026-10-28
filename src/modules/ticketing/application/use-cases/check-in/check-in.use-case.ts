@@ -5,9 +5,23 @@ import type { CheckInResult, CheckInRepository } from "@/modules/ticketing/domai
 import type { ICredentialProvider } from "@/modules/ticketing/domain/services/credential-provider.interface";
 import type { IAuditRepository } from "@/modules/ticketing/domain/repositories/audit-repository.interface";
 
-export type CheckInInputDto = { qrToken: string; operatorId: string; operatorName: string; canReenter: boolean; supervisorReentry: boolean; justification?: string; ip: string | null };
+export type CheckInInputDto = {
+  qrToken?: string;
+  registrationCode?: string;
+  operatorId: string;
+  operatorName: string;
+  canReenter: boolean;
+  supervisorReentry: boolean;
+  justification?: string;
+  ip: string | null;
+};
 export type CheckInOutputDto = CheckInResult;
-export type CheckInDependencies = { checkInRepository: CheckInRepository; credentialProvider: ICredentialProvider; auditRepository: IAuditRepository; checkInDomainService: CheckInDomainService };
+export type CheckInDependencies = {
+  checkInRepository: CheckInRepository;
+  credentialProvider: ICredentialProvider;
+  auditRepository: IAuditRepository;
+  checkInDomainService: CheckInDomainService;
+};
 
 export class CheckInUseCase extends UseCase<CheckInInputDto, CheckInOutputDto> {
   private readonly checkInRepository: CheckInRepository;
@@ -24,11 +38,45 @@ export class CheckInUseCase extends UseCase<CheckInInputDto, CheckInOutputDto> {
   }
 
   async execute(input: CheckInInputDto): Promise<Result<CheckInOutputDto>> {
-    const registrationId = this.credentialProvider.verifyQrToken({ token: input.qrToken });
-    if (!registrationId) return Result.fail(new Error("QR Code inválido ou adulterado."));
     const at = new Date();
-    const context = await this.checkInRepository.findContext({ registrationId, at });
-    if (!context) return Result.fail(new Error("Inscrição não encontrada para este QR Code."));
+    let registrationId: string | null = null;
+    let registrationCode: string | null = null;
+
+    if (input.registrationCode?.trim()) {
+      registrationCode = input.registrationCode.trim().toUpperCase();
+    } else if (input.qrToken?.trim()) {
+      const rawToken = input.qrToken.trim();
+      if (rawToken.startsWith("RT1.")) {
+        const verifiedId = this.credentialProvider.verifyQrToken({ token: rawToken });
+        if (!verifiedId) {
+          return Result.fail(new Error("QR Code inválido ou adulterado."));
+        }
+        registrationId = verifiedId;
+      } else {
+        registrationCode = rawToken.toUpperCase();
+      }
+    }
+
+    if (!registrationId && !registrationCode) {
+      return Result.fail(new Error("Informe o QR Code ou o código da inscrição."));
+    }
+
+    const context = await this.checkInRepository.findContext({
+      registrationId: registrationId ?? undefined,
+      registrationCode: registrationCode ?? undefined,
+      at,
+    });
+
+    if (!context) {
+      return Result.fail(
+        new Error(
+          registrationCode
+            ? `Inscrição não encontrada para o código "${registrationCode}".`
+            : "Inscrição não encontrada para este QR Code.",
+        ),
+      );
+    }
+
     const reentryGranted = input.supervisorReentry && input.canReenter;
     const eligibility = this.checkInDomainService.execute({
       registrationStatus: context.registrationStatus,
@@ -40,8 +88,9 @@ export class CheckInUseCase extends UseCase<CheckInInputDto, CheckInOutputDto> {
       justification: input.justification,
     });
     if (eligibility.isFailure) return Result.fail(eligibility.error);
+
     const result = await this.checkInRepository.create({
-      registrationId,
+      registrationId: context.registrationId,
       operatorId: input.operatorId,
       operatorName: input.operatorName,
       at,
@@ -49,6 +98,7 @@ export class CheckInUseCase extends UseCase<CheckInInputDto, CheckInOutputDto> {
       justification: eligibility.value.type === "reentrada_autorizada" ? input.justification?.trim() ?? null : null,
     });
     if (!result.accepted) return Result.ok(result);
+
     await this.auditRepository.write({
       userId: input.operatorId,
       userName: input.operatorName,
@@ -56,9 +106,14 @@ export class CheckInUseCase extends UseCase<CheckInInputDto, CheckInOutputDto> {
       entity: "registration",
       recordId: result.registrationCode,
       beforeData: result.previousCheckInAt ? { previousCheckInAt: result.previousCheckInAt.toISOString() } : null,
-      afterData: { happenedAt: result.happenedAt.toISOString(), type: eligibility.value.type },
+      afterData: {
+        happenedAt: result.happenedAt.toISOString(),
+        type: eligibility.value.type,
+        method: registrationCode ? "code" : "qr",
+      },
       ip: input.ip,
     });
+
     return Result.ok(result);
   }
 }

@@ -5,6 +5,7 @@ import { ParticipantFileDomainService } from "@/modules/ticketing/domain/registr
 import { BannerImageDomainService } from "@/modules/ticketing/domain/events/services/banner-image.domain-service";
 import { EventConfigurationDomainService } from "@/modules/ticketing/domain/events/services/event-configuration.domain-service";
 import { CancelRegistrationUseCase } from "@/modules/ticketing/application/use-cases/cancel-registration/cancel-registration.use-case";
+import { CancelCheckInUseCase } from "@/modules/ticketing/application/use-cases/cancel-check-in/cancel-check-in.use-case";
 import { CheckInUseCase } from "@/modules/ticketing/application/use-cases/check-in/check-in.use-case";
 import { CreateEventUseCase } from "@/modules/ticketing/application/use-cases/create-event/create-event.use-case";
 import { UploadEventBannerUseCase } from "@/modules/ticketing/application/use-cases/upload-event-banner/upload-event-banner.use-case";
@@ -81,6 +82,7 @@ export type TicketingContainer = {
   extendRegistrationReservation: ExtendRegistrationReservationUseCase;
   processPaymentWebhook: ProcessPaymentWebhookUseCase;
   checkIn: CheckInUseCase;
+  cancelCheckIn: CancelCheckInUseCase;
   getDashboard: GetDashboardUseCase;
   getReport: GetReportUseCase;
   listAuditLog: ListAuditLogUseCase;
@@ -280,6 +282,10 @@ export function createTicketingContainer(): TicketingContainer {
       credentialProvider,
       auditRepository,
       checkInDomainService: new CheckInDomainService(),
+    }),
+    cancelCheckIn: new CancelCheckInUseCase({
+      checkInRepository,
+      auditRepository,
     }),
     getDashboard: new GetDashboardUseCase({ reportingRepository }),
     getReport: new GetReportUseCase({ reportingRepository }),

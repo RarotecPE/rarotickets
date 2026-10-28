@@ -343,15 +343,40 @@ export class TicketingApiService extends ApiService {
     ).data;
   }
   async checkIn(params: {
-    qrToken: string;
-    reentry: boolean;
+    qrToken?: string;
+    registrationCode?: string;
+    reentry?: boolean;
     justification?: string;
   }): Promise<CheckInResponse> {
     return (
       await this.httpClient.request<CheckInResponse>({
         path: "/api/v1/admin/check-in",
         method: "POST",
-        body: params,
+        body: {
+          qrToken: params.qrToken,
+          registrationCode: params.registrationCode,
+          reentry: Boolean(params.reentry),
+          justification: params.justification,
+        },
+      })
+    ).data;
+  }
+  async cancelCheckIn(params: {
+    registrationId: string;
+    checkInId?: string;
+    reason?: string;
+  }): Promise<{ registrationCode: string; cancelledCheckInId: string }> {
+    return (
+      await this.httpClient.request<{
+        registrationCode: string;
+        cancelledCheckInId: string;
+      }>({
+        path: `/api/v1/admin/registrations/${encodeURIComponent(params.registrationId)}/cancel-check-in`,
+        method: "POST",
+        body: {
+          checkInId: params.checkInId,
+          reason: params.reason,
+        },
       })
     ).data;
   }

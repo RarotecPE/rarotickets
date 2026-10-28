@@ -1,5 +1,13 @@
-export type CheckInContextParams = { registrationId: string; at: Date };
+import type { Result } from "@/@core/domain/result";
+import type { DomainError } from "@/@core/domain/errors/domain-error.base";
+
+export type CheckInContextParams = {
+  registrationId?: string;
+  registrationCode?: string;
+  at: Date;
+};
 export type CheckInContext = {
+  registrationId: string;
   registrationCode: string;
   registrationStatus: string;
   eventId: string;
@@ -32,12 +40,34 @@ export type CheckInResult = {
   previousCheckInAt: Date | null;
 };
 
+export type CancelCheckInParams = {
+  registrationId: string;
+  checkInId?: string;
+  actorId: string;
+  actorName: string;
+  canManageAll: boolean;
+  at: Date;
+  reason?: string | null;
+};
+
+export type CancelCheckInResult = {
+  registrationId: string;
+  registrationCode: string;
+  participantName: string;
+  cancelledCheckInId: string;
+  checkInType: string;
+  happenedAt: Date;
+  operatorName: string;
+};
+
 export interface ICheckInRepository {
   findContext(params: CheckInContextParams): Promise<CheckInContext | null>;
   create(params: CreateCheckInParams): Promise<CheckInResult>;
+  cancelCheckIn(params: CancelCheckInParams): Promise<Result<CancelCheckInResult, DomainError>>;
 }
 
 export abstract class CheckInRepository implements ICheckInRepository {
   abstract findContext(params: CheckInContextParams): Promise<CheckInContext | null>;
   abstract create(params: CreateCheckInParams): Promise<CheckInResult>;
+  abstract cancelCheckIn(params: CancelCheckInParams): Promise<Result<CancelCheckInResult, DomainError>>;
 }

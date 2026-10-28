@@ -1,13 +1,24 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, ilike, isNull } from "drizzle-orm";
 import { CheckInRepository } from "@/modules/ticketing/domain/repositories/checkin-repository.interface";
-import type { CheckInContext, CheckInContextParams, CheckInResult, CreateCheckInParams } from "@/modules/ticketing/domain/repositories/checkin-repository.interface";
+import type {
+  CancelCheckInParams,
+  CancelCheckInResult,
+  CheckInContext,
+  CheckInContextParams,
+  CheckInResult,
+  CreateCheckInParams,
+} from "@/modules/ticketing/domain/repositories/checkin-repository.interface";
+import { Result } from "@/@core/domain/result";
+import type { DomainError } from "@/@core/domain/errors/domain-error.base";
+import { CheckInRuleError } from "@/modules/ticketing/domain/services/check-in.domain-service";
 import { checkins, events, participants, registrations } from "@/server/infrastructure/persistence/schema";
 import { readEnvironment } from "@/server/config/environment.config";
 import type { Database } from "@/server/infrastructure/persistence/database";
 
 export type DrizzleCheckInRepositoryDependencies = { database: Database };
 type CheckInLookupRow = {
+  registrationId: string;
   registrationCode: string;
   registrationStatus: string;
   eventId: string;
@@ -28,9 +39,13 @@ export class DrizzleCheckInRepository extends CheckInRepository {
   }
 
   async findContext(params: CheckInContextParams): Promise<CheckInContext | null> {
-    const row = await this.findLookupRow(params.registrationId);
+    const row = await this.findLookupRow({
+      registrationId: params.registrationId,
+      registrationCode: params.registrationCode,
+    });
     if (!row) return null;
     return {
+      registrationId: row.registrationId,
       registrationCode: row.registrationCode,
       registrationStatus: row.registrationStatus,
       eventId: row.eventId,
@@ -71,15 +86,108 @@ export class DrizzleCheckInRepository extends CheckInRepository {
       });
     } catch (error) {
       if (isUniqueViolation(error)) {
-        const row = await this.findLookupRow(params.registrationId);
+        const row = await this.findLookupRow({ registrationId: params.registrationId });
         return { accepted: false, registrationCode: row?.registrationCode ?? "", participantName: row?.participantName ?? "", eventTitle: row?.eventTitle ?? "", happenedAt: params.at, operatorName: params.operatorName, reason: row?.previousCheckInAt ? `Check-in já realizado em ${row.previousCheckInAt.toLocaleString("pt-BR")} por ${row.previousCheckInBy ?? "outro operador"}.` : "Check-in já realizado para esta inscrição.", previousCheckInAt: row?.previousCheckInAt ?? null };
       }
       throw error;
     }
   }
 
-  private async findLookupRow(registrationId: string): Promise<CheckInLookupRow | null> {
+  async cancelCheckIn(
+    params: CancelCheckInParams,
+  ): Promise<Result<CancelCheckInResult, DomainError>> {
+    return this.database.transaction(async (transaction) => {
+      const accessFilters = [
+        eq(registrations.id, params.registrationId),
+        isNull(registrations.deletedAt),
+      ];
+      if (!params.canManageAll) {
+        accessFilters.push(eq(events.createdByGlobalUserId, params.actorId));
+      }
+
+      const [row] = await transaction
+        .select({
+          registration: registrations,
+          event: events,
+          participant: participants,
+        })
+        .from(registrations)
+        .innerJoin(events, eq(registrations.eventId, events.id))
+        .innerJoin(participants, eq(registrations.participantId, participants.id))
+        .where(and(...accessFilters))
+        .for("update")
+        .limit(1);
+
+      if (!row) {
+        return Result.fail(
+          new CheckInRuleError({
+            code: "REGISTRATION_NOT_FOUND",
+            message:
+              "Inscrição não encontrada ou você não tem permissão para gerenciá-la.",
+          }),
+        );
+      }
+
+      if (row.registration.status !== "confirmada") {
+        return Result.fail(
+          new CheckInRuleError({
+            code: "REGISTRATION_NOT_CONFIRMED",
+            message: "Apenas inscrições confirmadas permitem cancelar check-in.",
+          }),
+        );
+      }
+
+      const checkInFilters = [eq(checkins.registrationId, params.registrationId)];
+      if (params.checkInId) {
+        checkInFilters.push(eq(checkins.id, params.checkInId));
+      }
+
+      const checkInRows = await transaction
+        .select()
+        .from(checkins)
+        .where(and(...checkInFilters))
+        .orderBy(desc(checkins.happenedAt))
+        .limit(1);
+
+      if (!checkInRows.length) {
+        return Result.fail(
+          new CheckInRuleError({
+            code: "CHECKIN_NOT_FOUND",
+            message: "Nenhum check-in encontrado para esta inscrição.",
+          }),
+        );
+      }
+
+      const target = checkInRows[0];
+
+      await transaction.delete(checkins).where(eq(checkins.id, target.id));
+
+      return Result.ok({
+        registrationId: row.registration.id,
+        registrationCode: row.registration.code,
+        participantName: row.participant.name,
+        cancelledCheckInId: target.id,
+        checkInType: target.type,
+        happenedAt: target.happenedAt,
+        operatorName: target.operatorName,
+      });
+    });
+  }
+
+  private async findLookupRow(lookup: {
+    registrationId?: string;
+    registrationCode?: string;
+  }): Promise<CheckInLookupRow | null> {
+    const condition = lookup.registrationId
+      ? eq(registrations.id, lookup.registrationId)
+      : lookup.registrationCode
+        ? ilike(registrations.code, lookup.registrationCode.trim())
+        : null;
+
+    if (!condition) return null;
+
     const [row] = await this.database.select({
+      registrationId: registrations.id,
       registrationCode: registrations.code,
       registrationStatus: registrations.status,
       eventId: events.id,
@@ -94,7 +202,7 @@ export class DrizzleCheckInRepository extends CheckInRepository {
       .innerJoin(events, eq(registrations.eventId, events.id))
       .innerJoin(participants, eq(registrations.participantId, participants.id))
       .leftJoin(checkins, and(eq(registrations.id, checkins.registrationId), eq(checkins.type, "normal")))
-      .where(eq(registrations.id, registrationId)).limit(1);
+      .where(condition).limit(1);
     return row ?? null;
   }
 }
