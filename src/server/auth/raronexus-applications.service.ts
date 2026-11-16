@@ -10,7 +10,7 @@ export async function loadApplications(params: ApplicationsServiceParams): Promi
   const upstream = await fetch(`${environment.raroNexusBaseUrl}/api/v1/applications`, {
     headers: { Cookie: `raronexus_global_session=${encodeURIComponent(params.token)}` },
     cache: "no-store",
-    signal: AbortSignal.timeout(5_000),
+    signal: AbortSignal.timeout(15_000),
   });
   const response: unknown = await upstream.json().catch(() => null);
   if (!upstream.ok || !isRecord(response) || response.success !== true || !Array.isArray(response.data)) throw new Error("Não foi possível carregar os aplicativos no RaroNexus.");

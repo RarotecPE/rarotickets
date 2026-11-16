@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  Award,
   Ban,
   CalendarCheck,
   CalendarDays,
@@ -275,6 +276,15 @@ export function ManagedEventDetail({ eventId }: ManagedEventDetailProps) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <EventStatusBadge status={event.props.status} />
+          {event.props.status === "finalizado" && canWrite ? (
+            <Link
+              href={`/painel/certificados/${event.id}`}
+              className="inline-flex h-9 items-center gap-2 rounded-app-md bg-app-primary px-3 text-xs font-semibold text-white hover:brightness-110"
+            >
+              <Award className="h-3.5 w-3.5" aria-hidden="true" />
+              Gerenciar certificados
+            </Link>
+          ) : null}
           {event.props.status !== "finalizado" && canWrite ? (
             <Link
               href={`/painel/eventos/${event.id}/editar`}

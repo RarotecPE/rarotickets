@@ -32,6 +32,7 @@ export type ApplicationEnvironment = {
   raroNexusEmailEndpointPaymentConfirmed: string;
   raroNexusEmailEndpointWaitlistPromoted: string;
   raroNexusEmailEndpointPixPendingNotification: string;
+  raroNexusEmailEndpointCertificateIssued: string;
   raroNexusRoleKeys: RoleEnvironmentKeys;
   emailProvider: "raronexus" | "smtp";
   smtpHost: string;
@@ -102,6 +103,8 @@ export function readEnvironment(): ApplicationEnvironment {
       "confirmacao-pagamento-participante",
     raroNexusEmailEndpointPixPendingNotification:
       process.env.RARONEXUS_EMAIL_ENDPOINT_PIX_PENDING_NOTIFICATION ?? "notificacao-pix-pendente",
+    raroNexusEmailEndpointCertificateIssued:
+      process.env.RARONEXUS_EMAIL_ENDPOINT_CERTIFICATE_ISSUED ?? "certificado-participante",
     raroNexusRoleKeys: {
       administrador: process.env.RARONEXUS_ROLE_ADMIN ?? "administrador",
       gerente_evento: process.env.RARONEXUS_ROLE_EVENT_MANAGER ?? "gerente_evento",

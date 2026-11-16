@@ -17,7 +17,17 @@ import type {
 import type {
   CertificateReadModel,
   CertificateBatchResult,
+  CertificateEventSummaryReadModel,
+  CertificateEventWorkspaceReadModel,
+  CertificateHubReadModel,
+  CertificatePresetReadModel,
 } from "@/modules/ticketing/domain/repositories/certificate-repository.interface";
+import type {
+  CertificateEmailConfig,
+  CertificateLayoutConfig,
+  CertificateSelectionConfig,
+  CertificateWorkflowStatus,
+} from "@/modules/ticketing/domain/certificates/services/certificate-text.domain-service";
 import type {
   RaffleFilterType,
   RafflePrizeInput,
@@ -572,6 +582,156 @@ export class TicketingApiService extends ApiService {
       await this.httpClient.request<PublicRaffleView>({
         path: `/api/v1/public/raffles/${encodeURIComponent(params.token)}`,
         method: "GET",
+      })
+    ).data;
+  }
+
+  async listCertificateHub(
+    params: { query?: string } = {},
+  ): Promise<CertificateHubReadModel> {
+    return (
+      await this.httpClient.request<CertificateHubReadModel>({
+        path: "/api/v1/admin/certificates",
+        method: "GET",
+        query: { q: params.query },
+      })
+    ).data;
+  }
+
+  async updateEventCertificateStatus(params: {
+    eventId: string;
+    workflowStatus: CertificateWorkflowStatus;
+  }): Promise<CertificateEventSummaryReadModel> {
+    return (
+      await this.httpClient.request<CertificateEventSummaryReadModel>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/certificate-status`,
+        method: "PATCH",
+        body: { workflowStatus: params.workflowStatus },
+      })
+    ).data;
+  }
+
+  async getEventCertificateWorkspace(params: {
+    eventId: string;
+  }): Promise<CertificateEventWorkspaceReadModel> {
+    return (
+      await this.httpClient.request<CertificateEventWorkspaceReadModel>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/certificates/workspace`,
+        method: "GET",
+      })
+    ).data;
+  }
+
+  async saveEventCertificateWorkspace(params: {
+    eventId: string;
+    workloadHours?: number;
+    certificateDescription?: string;
+    templatePdfKey?: string | null;
+    templatePdfName?: string | null;
+    layoutConfig?: CertificateLayoutConfig;
+    emailConfig?: CertificateEmailConfig;
+    selectionConfig?: CertificateSelectionConfig;
+    workflowStatus?: CertificateWorkflowStatus;
+    issueBatch?: boolean;
+    resetEmailStatuses?: boolean;
+  }): Promise<CertificateEventWorkspaceReadModel> {
+    const { eventId, ...body } = params;
+    return (
+      await this.httpClient.request<CertificateEventWorkspaceReadModel>({
+        path: `/api/v1/admin/events/${encodeURIComponent(eventId)}/certificates/workspace`,
+        method: "PATCH",
+        body,
+      })
+    ).data;
+  }
+
+  async uploadCertificateTemplate(params: {
+    eventId: string;
+    file: File;
+  }): Promise<{ templatePdfKey: string; templatePdfName: string }> {
+    const formData = new FormData();
+    formData.set("file", params.file);
+    return (
+      await this.httpClient.request<{
+        templatePdfKey: string;
+        templatePdfName: string;
+      }>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/certificates/template`,
+        method: "POST",
+        body: formData,
+      })
+    ).data;
+  }
+
+  async fetchCertificateTemplatePdfBytes(params: {
+    eventId: string;
+    key?: string;
+  }): Promise<Uint8Array> {
+    const query = params.key ? `?key=${encodeURIComponent(params.key)}` : "";
+    const response = await fetch(
+      `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/certificates/template${query}`,
+      { credentials: "include" },
+    );
+    if (!response.ok) {
+      throw new Error("Não foi possível carregar o PDF do modelo.");
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
+  }
+
+  async sendCertificateEmail(params: {
+    eventId: string;
+    recipientKey?: string;
+    testRecipient?: string;
+  }): Promise<{
+    sent: boolean;
+    toEmail: string;
+    authenticationCode: string;
+    attachmentFilename: string;
+    sentAt: string;
+  }> {
+    return (
+      await this.httpClient.request<{
+        sent: boolean;
+        toEmail: string;
+        authenticationCode: string;
+        attachmentFilename: string;
+        sentAt: string;
+      }>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/certificates/send`,
+        method: "POST",
+        body: {
+          recipientKey: params.recipientKey,
+          testRecipient: params.testRecipient,
+        },
+      })
+    ).data;
+  }
+
+  async createCertificatePreset(params: {
+    name: string;
+    templatePdfKey?: string | null;
+    templatePdfName?: string | null;
+    layoutConfig: CertificateLayoutConfig;
+    emailConfig?: CertificateEmailConfig | null;
+    workloadHoursDefault?: number | null;
+  }): Promise<CertificatePresetReadModel> {
+    return (
+      await this.httpClient.request<CertificatePresetReadModel>({
+        path: "/api/v1/admin/certificate-presets",
+        method: "POST",
+        body: params,
+      })
+    ).data;
+  }
+
+  async deleteCertificatePreset(params: {
+    presetId: string;
+  }): Promise<{ deleted: boolean }> {
+    return (
+      await this.httpClient.request<{ deleted: boolean }>({
+        path: `/api/v1/admin/certificate-presets/${encodeURIComponent(params.presetId)}`,
+        method: "DELETE",
       })
     ).data;
   }
