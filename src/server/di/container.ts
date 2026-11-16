@@ -18,6 +18,21 @@ import { GetPublicFileUseCase } from "@/modules/ticketing/application/use-cases/
 import { GetDashboardUseCase } from "@/modules/ticketing/application/use-cases/get-dashboard/get-dashboard.use-case";
 import { GetReportUseCase } from "@/modules/ticketing/application/use-cases/get-report/get-report.use-case";
 import { ValidateCertificateUseCase } from "@/modules/ticketing/application/use-cases/validate-certificate/validate-certificate.use-case";
+import { ListCertificateEventsUseCase } from "@/modules/ticketing/application/use-cases/list-certificate-events/list-certificate-events.use-case";
+import { UpdateEventCertificateStatusUseCase } from "@/modules/ticketing/application/use-cases/update-event-certificate-status/update-event-certificate-status.use-case";
+import { GetEventCertificateWorkspaceUseCase } from "@/modules/ticketing/application/use-cases/get-event-certificate-workspace/get-event-certificate-workspace.use-case";
+import { SaveEventCertificateWorkspaceUseCase } from "@/modules/ticketing/application/use-cases/save-event-certificate-workspace/save-event-certificate-workspace.use-case";
+import {
+  GetCertificateTemplatePdfUseCase,
+  UploadCertificateTemplateUseCase,
+} from "@/modules/ticketing/application/use-cases/upload-certificate-template/upload-certificate-template.use-case";
+import {
+  CreateCertificatePresetUseCase,
+  DeleteCertificatePresetUseCase,
+} from "@/modules/ticketing/application/use-cases/manage-certificate-presets/manage-certificate-presets.use-case";
+import { RenderCertificatePdfUseCase } from "@/modules/ticketing/application/use-cases/render-certificate-pdf/render-certificate-pdf.use-case";
+import { SendCertificateEmailUseCase } from "@/modules/ticketing/application/use-cases/send-certificate-email/send-certificate-email.use-case";
+import { CertificateTemplateFileDomainService } from "@/modules/ticketing/domain/certificates/services/certificate-template-file.domain-service";
 import { ListAuditLogUseCase } from "@/modules/ticketing/application/use-cases/list-audit-log/list-audit-log.use-case";
 import { GetManagedEventUseCase } from "@/modules/ticketing/application/use-cases/get-managed-event/get-managed-event.use-case";
 import { GetParticipantPortalUseCase } from "@/modules/ticketing/application/use-cases/get-participant-portal/get-participant-portal.use-case";
@@ -105,6 +120,16 @@ export type TicketingContainer = {
   listAuditLog: ListAuditLogUseCase;
   validateCertificate: ValidateCertificateUseCase;
   issueCertificates: IssueCertificatesUseCase;
+  listCertificateEvents: ListCertificateEventsUseCase;
+  updateEventCertificateStatus: UpdateEventCertificateStatusUseCase;
+  getEventCertificateWorkspace: GetEventCertificateWorkspaceUseCase;
+  saveEventCertificateWorkspace: SaveEventCertificateWorkspaceUseCase;
+  uploadCertificateTemplate: UploadCertificateTemplateUseCase;
+  getCertificateTemplatePdf: GetCertificateTemplatePdfUseCase;
+  createCertificatePreset: CreateCertificatePresetUseCase;
+  deleteCertificatePreset: DeleteCertificatePresetUseCase;
+  renderCertificatePdf: RenderCertificatePdfUseCase;
+  sendCertificateEmail: SendCertificateEmailUseCase;
   processOutbox: ProcessOutboxUseCase;
   promoteWaitlist: PromoteWaitlistUseCase;
   runMaintenance: RunMaintenanceUseCase;
@@ -333,6 +358,51 @@ export function createTicketingContainer(): TicketingContainer {
     issueCertificates: new IssueCertificatesUseCase({
       certificateRepository,
       auditRepository,
+    }),
+    listCertificateEvents: new ListCertificateEventsUseCase({
+      certificateRepository,
+    }),
+    updateEventCertificateStatus: new UpdateEventCertificateStatusUseCase({
+      certificateRepository,
+      auditRepository,
+    }),
+    getEventCertificateWorkspace: new GetEventCertificateWorkspaceUseCase({
+      certificateRepository,
+    }),
+    saveEventCertificateWorkspace: new SaveEventCertificateWorkspaceUseCase({
+      certificateRepository,
+      auditRepository,
+    }),
+    uploadCertificateTemplate: new UploadCertificateTemplateUseCase({
+      certificateRepository,
+      fileStorageProvider,
+      idGenerator,
+      templateValidator: new CertificateTemplateFileDomainService(),
+      auditRepository,
+    }),
+    getCertificateTemplatePdf: new GetCertificateTemplatePdfUseCase({
+      certificateRepository,
+      fileStorageProvider,
+    }),
+    createCertificatePreset: new CreateCertificatePresetUseCase({
+      certificateRepository,
+      auditRepository,
+    }),
+    deleteCertificatePreset: new DeleteCertificatePresetUseCase({
+      certificateRepository,
+      auditRepository,
+    }),
+    renderCertificatePdf: new RenderCertificatePdfUseCase({
+      certificateRepository,
+      fileStorageProvider,
+      publicBaseUrl: environment.appBaseUrl,
+    }),
+    sendCertificateEmail: new SendCertificateEmailUseCase({
+      certificateRepository,
+      fileStorageProvider,
+      emailSender: participantEmailSender,
+      auditRepository,
+      publicBaseUrl: environment.appBaseUrl,
     }),
     processOutbox,
     promoteWaitlist,

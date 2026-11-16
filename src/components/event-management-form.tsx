@@ -972,7 +972,6 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
           onChange={updateActivity}
           onRemove={(rowId) => removeRow({ kind: "activity", rowId })}
         />
-        <EventCertificateSection draft={draft} onChange={updateDraft} />
         {pendencies.length > 0 ? (
           <div
             role="alert"
@@ -2563,7 +2562,7 @@ function ActivitiesSection({
   );
 }
 
-function EventCertificateSection({
+function _EventCertificateSection({
   draft,
   onChange,
 }: {

@@ -474,13 +474,22 @@ export function ParticipantPortal({ accessToken }: ParticipantPortalProps) {
                   <p className="font-mono text-sm font-semibold text-app-foreground">
                     {portal.certificateCode}
                   </p>
-                  <Link
-                    href={`/certificados/${encodeURIComponent(portal.certificateCode)}`}
-                    className="mt-3 inline-flex h-9 items-center gap-2 rounded-app-md bg-app-primary px-3 text-xs font-semibold text-white hover:brightness-110"
-                  >
-                    Verificar certificado
-                    <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  </Link>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/certificados/${encodeURIComponent(portal.certificateCode)}`}
+                      className="inline-flex h-9 items-center gap-2 rounded-app-md bg-app-primary px-3 text-xs font-semibold text-white hover:brightness-110"
+                    >
+                      Verificar certificado
+                      <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Link>
+                    <a
+                      href={`/api/v1/certificates/${encodeURIComponent(portal.certificateCode)}/pdf`}
+                      className="inline-flex h-9 items-center gap-2 rounded-app-md border border-app-border bg-app-surface-elevated px-3 text-xs font-semibold text-app-foreground hover:bg-app-surface"
+                    >
+                      <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                      Baixar PDF
+                    </a>
+                  </div>
                 </div>
               </Panel>
             ) : null}

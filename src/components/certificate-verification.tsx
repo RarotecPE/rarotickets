@@ -137,13 +137,21 @@ export function CertificateVerification({
               >
                 Conheça outros eventos
               </Link>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => window.print()}
-              >
-                Imprimir certificado
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={`/api/v1/certificates/${encodeURIComponent(certificate.authenticationCode)}/pdf`}
+                  className="inline-flex h-9 items-center gap-2 rounded-app-md bg-app-primary px-4 text-xs font-semibold text-white hover:brightness-110"
+                >
+                  Baixar PDF do certificado
+                </a>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => window.print()}
+                >
+                  Imprimir página
+                </Button>
+              </div>
             </div>
           </div>
         </Panel>

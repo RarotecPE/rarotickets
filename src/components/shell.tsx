@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, type ReactNode } from "react";
 import {
+  Award,
   CalendarDays,
   ChartNoAxesCombined,
   ClipboardList,
@@ -50,6 +51,12 @@ export const NAV_ITEMS: NavigationItem[] = [
     label: "Credenciamento",
     icon: ScanLine,
     permission: "checkin:write",
+  },
+  {
+    href: "/painel/certificados",
+    label: "Certificados",
+    icon: Award,
+    permission: "certificates:write",
   },
   {
     href: "/painel/relatorios",

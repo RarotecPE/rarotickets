@@ -9,6 +9,8 @@ import type {
   SendPaymentConfirmedEmailParams,
   SendWaitlistPromotedEmailParams,
   SendPixPendingNotificationEmailParams,
+  SendCertificateEmailParams,
+  SendCertificateEmailResult,
 } from "@/modules/ticketing/domain/services/participant-email-sender.interface";
 
 export class ParticipantEmailProvider implements IParticipantEmailSender {
@@ -511,6 +513,88 @@ export class ParticipantEmailProvider implements IParticipantEmailSender {
         error,
       );
     }
+  }
+
+  async sendCertificateEmail(
+    params: SendCertificateEmailParams,
+  ): Promise<SendCertificateEmailResult> {
+    const env = readEnvironment();
+    const endpoint =
+      env.raroNexusEmailEndpointCertificateIssued ||
+      env.raroNexusEmailEndpoint ||
+      "certificado-participante";
+
+    const paragraphsHtml = params.bodyText
+      .split(/\r?\n\r?\n/)
+      .map((para) => {
+        const lines = para
+          .split(/\r?\n/)
+          .map((l) => escapeHtml(l))
+          .join("<br />");
+        return `<p style="margin: 0 0 14px 0; font-size: 14px; color: #374151; line-height: 1.6;">${lines}</p>`;
+      })
+      .join("");
+
+    const bodyHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #111827; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
+        <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 20px;">
+          <span style="display: inline-block; background-color: #dbeafe; color: #1e40af; font-size: 12px; font-weight: bold; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase;">
+            ${params.isTest ? "Teste de Certificado" : "Certificado Digital"}
+          </span>
+          <h2 style="color: #111827; margin: 12px 0 4px 0; font-size: 20px;">${escapeHtml(params.eventTitle)}</h2>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          ${paragraphsHtml}
+        </div>
+
+        <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+          <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>Participante:</strong> ${escapeHtml(params.participantName)}</p>
+          <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>Carga horária:</strong> ${params.workloadHours} horas</p>
+          <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>Código de autenticidade:</strong> <span style="font-family: monospace; font-weight: bold; color: #111827;">${escapeHtml(params.authenticationCode)}</span></p>
+        </div>
+
+        ${
+          params.verificationUrl
+            ? `<div style="text-align: center; margin: 24px 0;">
+                <a href="${sanitizeUrlAttribute(params.verificationUrl)}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block; font-size: 14px;">
+                  Validar e Baixar Certificado Online
+                </a>
+              </div>`
+            : ""
+        }
+
+        <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 20px;">
+          O arquivo em PDF do seu certificado segue anexado a este e-mail (${escapeHtml(params.attachmentFilename)}).
+        </p>
+      </div>
+    `.trim();
+
+    const result = await this.emailClient.send({
+      to: params.toEmail,
+      subject: params.subject,
+      body: bodyHtml,
+      endpoint,
+      attachments: [
+        {
+          filename: params.attachmentFilename,
+          contentType: "application/pdf",
+          contentBase64: params.attachmentBase64,
+        },
+      ],
+      metadata: {
+        origin: "modulo-certificados",
+        eventTitle: params.eventTitle,
+        participantName: params.participantName,
+        authenticationCode: params.authenticationCode,
+        isTest: Boolean(params.isTest),
+      },
+    });
+
+    return {
+      sent: result.sent,
+      messageId: result.messageId,
+    };
   }
 }
 

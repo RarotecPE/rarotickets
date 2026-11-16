@@ -40,7 +40,7 @@ export class RaroNexusClient {
         redirect_uri: params.redirectUri,
       }),
       cache: "no-store",
-      signal: AbortSignal.timeout(6_000),
+      signal: AbortSignal.timeout(15_000),
     });
     const envelope = await readEnvelope<TokenResponseData>(response);
     if (!response.ok || !envelope?.success || !envelope.data) {
@@ -63,9 +63,21 @@ export class RaroNexusClient {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ token: params.token, client_id: environment.raroNexusClientId }),
       cache: "no-store",
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(15_000),
     });
     const envelope = await readEnvelope<IntrospectionResponseData>(response);
+    if (
+      response.status === 401 ||
+      (response.ok && envelope?.data && envelope.data.active === false) ||
+      (response.status >= 400 && response.status < 500)
+    ) {
+      throw new AuthFailure({
+        kind: "unauthenticated",
+        code: "SESSION_INACTIVE",
+        message: "A sessão central está inativa ou expirou.",
+        httpStatus: 401,
+      });
+    }
     if (!response.ok || !envelope?.success || !envelope.data || envelope.data.active !== true) {
       throw new Error("A sessão central está inativa ou não pôde ser validada.");
     }

@@ -52,6 +52,7 @@ type RegistrationFilters = {
   eventIds: string[];
   query: string;
   status: string;
+  checkInStatus: string;
 };
 
 const STATUS_FILTER_OPTIONS: Array<{
@@ -71,6 +72,16 @@ const STATUS_FILTER_OPTIONS: Array<{
   { value: "cancelada", label: "Cancelada", tone: "danger" },
 ];
 
+const CHECKIN_FILTER_OPTIONS: Array<{
+  value: string;
+  label: string;
+  tone: Tone;
+}> = [
+  { value: "", label: "Todos", tone: "muted" },
+  { value: "presente", label: "Presentes", tone: "success" },
+  { value: "ausente", label: "Ausentes", tone: "warning" },
+];
+
 export function RegistrationsBrowser() {
   const auth = useAuth();
   const [events, setEvents] = useState<EventReadModel[]>([]);
@@ -83,10 +94,12 @@ export function RegistrationsBrowser() {
   const eventDropdownRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
+  const [checkInStatus, setCheckInStatus] = useState("");
   const [filters, setFilters] = useState<RegistrationFilters>({
     eventIds: [],
     query: "",
     status: "",
+    checkInStatus: "",
   });
   const [page, setPage] = useState(1);
   const [reloadVersion, setReloadVersion] = useState(0);
@@ -186,6 +199,7 @@ export function RegistrationsBrowser() {
           eventIds: filters.eventIds.length ? filters.eventIds : undefined,
           query: filters.query || undefined,
           status: filters.status || undefined,
+          checkInStatus: filters.checkInStatus || undefined,
           page,
           pageSize: PAGE_SIZE,
         });
@@ -213,7 +227,7 @@ export function RegistrationsBrowser() {
     setNotice(null);
     setLoading(true);
     setPage(1);
-    setFilters({ eventIds, query: query.trim(), status });
+    setFilters({ eventIds, query: query.trim(), status, checkInStatus });
     setReloadVersion((current) => current + 1);
   }
 
@@ -223,7 +237,12 @@ export function RegistrationsBrowser() {
     setNotice(null);
     setLoading(true);
     setPage(1);
-    setFilters({ eventIds: nextEventIds, query: query.trim(), status });
+    setFilters({
+      eventIds: nextEventIds,
+      query: query.trim(),
+      status,
+      checkInStatus,
+    });
     setReloadVersion((current) => current + 1);
   }
 
@@ -248,7 +267,34 @@ export function RegistrationsBrowser() {
     setNotice(null);
     setLoading(true);
     setPage(1);
-    setFilters({ eventIds, query: query.trim(), status: resolvedStatus });
+    setFilters({
+      eventIds,
+      query: query.trim(),
+      status: resolvedStatus,
+      checkInStatus,
+    });
+    setReloadVersion((current) => current + 1);
+  }
+
+  function selectCheckInFilter(nextValue: string): void {
+    const resolvedCheckIn =
+      checkInStatus === nextValue && nextValue !== "" ? "" : nextValue;
+    if (
+      resolvedCheckIn === checkInStatus &&
+      filters.checkInStatus === resolvedCheckIn
+    )
+      return;
+    setCheckInStatus(resolvedCheckIn);
+    setError(null);
+    setNotice(null);
+    setLoading(true);
+    setPage(1);
+    setFilters({
+      eventIds,
+      query: query.trim(),
+      status,
+      checkInStatus: resolvedCheckIn,
+    });
     setReloadVersion((current) => current + 1);
   }
 
@@ -695,41 +741,81 @@ export function RegistrationsBrowser() {
             </div>
           ) : null}
 
-          <div className="space-y-2">
-            <span className="block text-xs font-semibold text-app-muted-foreground">
-              Filtrar por status
-            </span>
-            <div
-              role="radiogroup"
-              aria-label="Filtrar inscrições por status"
-              className="flex flex-wrap items-center gap-2"
-            >
-              {STATUS_FILTER_OPTIONS.map((option) => {
-                const isSelected = status === option.value;
-                return (
-                  <button
-                    key={option.value || "all"}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    onClick={() => selectStatusFilter(option.value)}
-                    className={cn(
-                      "rounded-app-pill transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-primary",
-                      isSelected
-                        ? "ring-2 ring-app-primary/40 ring-offset-1 ring-offset-app-surface"
-                        : "opacity-75 hover:opacity-100",
-                    )}
-                  >
-                    <Badge
-                      tone={option.tone}
-                      solid={isSelected}
-                      className="cursor-pointer px-3 py-1 text-xs"
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-2">
+              <span className="block text-xs font-semibold text-app-muted-foreground">
+                Filtrar por status
+              </span>
+              <div
+                role="radiogroup"
+                aria-label="Filtrar inscrições por status"
+                className="flex flex-wrap items-center gap-2"
+              >
+                {STATUS_FILTER_OPTIONS.map((option) => {
+                  const isSelected = status === option.value;
+                  return (
+                    <button
+                      key={option.value || "all"}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => selectStatusFilter(option.value)}
+                      className={cn(
+                        "rounded-app-pill transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-primary",
+                        isSelected
+                          ? "ring-2 ring-app-primary/40 ring-offset-1 ring-offset-app-surface"
+                          : "opacity-75 hover:opacity-100",
+                      )}
                     >
-                      {option.label}
-                    </Badge>
-                  </button>
-                );
-              })}
+                      <Badge
+                        tone={option.tone}
+                        solid={isSelected}
+                        className="cursor-pointer px-3 py-1 text-xs"
+                      >
+                        {option.label}
+                      </Badge>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="block text-xs font-semibold text-app-muted-foreground">
+                Filtrar por check-in
+              </span>
+              <div
+                role="radiogroup"
+                aria-label="Filtrar inscrições por check-in"
+                className="flex flex-wrap items-center gap-2"
+              >
+                {CHECKIN_FILTER_OPTIONS.map((option) => {
+                  const isSelected = checkInStatus === option.value;
+                  return (
+                    <button
+                      key={option.value || "all-checkin"}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => selectCheckInFilter(option.value)}
+                      className={cn(
+                        "rounded-app-pill transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-primary",
+                        isSelected
+                          ? "ring-2 ring-app-primary/40 ring-offset-1 ring-offset-app-surface"
+                          : "opacity-75 hover:opacity-100",
+                      )}
+                    >
+                      <Badge
+                        tone={option.tone}
+                        solid={isSelected}
+                        className="cursor-pointer px-3 py-1 text-xs"
+                      >
+                        {option.label}
+                      </Badge>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

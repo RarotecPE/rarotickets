@@ -50,10 +50,30 @@ export type SendPixPendingNotificationEmailParams = {
   reservationExpiresAt?: Date | null;
 };
 
+export type SendCertificateEmailParams = {
+  toEmail: string;
+  subject: string;
+  bodyText: string;
+  participantName: string;
+  eventTitle: string;
+  workloadHours: number;
+  authenticationCode: string;
+  verificationUrl: string;
+  attachmentFilename: string;
+  attachmentBase64: string;
+  isTest?: boolean;
+};
+
+export type SendCertificateEmailResult = {
+  sent: boolean;
+  messageId: string | null;
+};
+
 export interface IParticipantEmailSender {
   sendActivationEmail(params: { email: string; activationUrl: string }): Promise<void>;
   sendOtpEmail(params: { email: string; code: string }): Promise<void>;
   sendPaymentConfirmedEmail?(params: SendPaymentConfirmedEmailParams): Promise<void>;
   sendWaitlistPromotedEmail?(params: SendWaitlistPromotedEmailParams): Promise<void>;
   sendPixPendingNotificationEmail?(params: SendPixPendingNotificationEmailParams): Promise<void>;
+  sendCertificateEmail?(params: SendCertificateEmailParams): Promise<SendCertificateEmailResult>;
 }

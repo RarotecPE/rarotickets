@@ -363,13 +363,22 @@ function ParticipantEventCard({ item }: { item: ParticipantEventItem }) {
 
         {/* Certificado se emitido */}
         {item.certificateCode && (
-          <Link
-            href={`/certificados/${item.certificateCode}`}
-            className={`${btnSecondary} h-8 gap-1.5 px-3 text-xs`}
-          >
-            <Award className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
-            Ver Certificado
-          </Link>
+          <>
+            <Link
+              href={`/certificados/${item.certificateCode}`}
+              className={`${btnSecondary} h-8 gap-1.5 px-3 text-xs`}
+            >
+              <Award className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+              Validar Certificado
+            </Link>
+            <a
+              href={`/api/v1/certificates/${encodeURIComponent(item.certificateCode)}/pdf`}
+              className={`${btnSecondary} h-8 gap-1.5 px-3 text-xs`}
+            >
+              <Award className="h-3.5 w-3.5 text-app-primary" aria-hidden="true" />
+              Baixar PDF
+            </a>
+          </>
         )}
       </div>
     </article>

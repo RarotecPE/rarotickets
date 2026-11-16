@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { EnvironmentBanner } from "@/components/environment-banner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,5 +12,12 @@ export const viewport: Viewport = { themeColor: "#f5f7fb", width: "device-width"
 
 export type RootLayoutProps = { children: ReactNode };
 export default function RootLayout({ children }: RootLayoutProps) {
-  return <html lang="pt-BR" className="theme-light h-full antialiased" suppressHydrationWarning><body className="theme-light min-h-screen bg-app-background font-sans text-app-foreground antialiased">{children}</body></html>;
+  return (
+    <html lang="pt-BR" className="theme-light h-full antialiased" suppressHydrationWarning>
+      <body className="theme-light min-h-screen bg-app-background font-sans text-app-foreground antialiased">
+        <EnvironmentBanner />
+        {children}
+      </body>
+    </html>
+  );
 }

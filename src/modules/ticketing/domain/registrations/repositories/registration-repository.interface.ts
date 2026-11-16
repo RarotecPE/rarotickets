@@ -134,7 +134,7 @@ export type ParticipantPortalView = {
   certificateCode: string | null;
   certificateIssuedAt: Date | null;
 };
-export type ListRegistrationsParams = { eventId?: string; eventIds?: string[]; query?: string; status?: string; page: number; pageSize: number; userId: string; canViewAll: boolean };
+export type ListRegistrationsParams = { eventId?: string; eventIds?: string[]; query?: string; status?: string; checkInStatus?: string; page: number; pageSize: number; userId: string; canViewAll: boolean };
 export type RegistrationAnswerDetail = {
   fieldId: string;
   label: string;
