@@ -104,6 +104,7 @@ export type AdminRegistrationQuery = {
   eventIds?: string[];
   query?: string;
   status?: string;
+  checkInStatus?: string;
   page?: number;
   pageSize?: number;
 };
@@ -316,6 +317,7 @@ export class TicketingApiService extends ApiService {
             : undefined,
           q: params.query,
           status: params.status,
+          checkInStatus: params.checkInStatus,
           page: params.page,
           pageSize: params.pageSize,
         },

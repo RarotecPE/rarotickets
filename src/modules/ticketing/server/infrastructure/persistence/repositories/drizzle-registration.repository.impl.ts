@@ -9,6 +9,7 @@ import {
   gte,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   lte,
   or,
@@ -728,6 +729,11 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
           params.status as typeof registrations.$inferSelect.status,
         ),
       );
+    if (params.checkInStatus === "presente") {
+      filters.push(isNotNull(checkins.id));
+    } else if (params.checkInStatus === "ausente") {
+      filters.push(isNull(checkins.id));
+    }
     if (params.query?.trim()) {
       const query = `%${params.query.trim()}%`;
       filters.push(
@@ -747,6 +753,13 @@ export class DrizzleRegistrationRepository extends RegistrationRepository {
       .from(registrations)
       .innerJoin(events, eq(registrations.eventId, events.id))
       .innerJoin(participants, eq(registrations.participantId, participants.id))
+      .leftJoin(
+        checkins,
+        and(
+          eq(registrations.id, checkins.registrationId),
+          eq(checkins.type, "normal"),
+        ),
+      )
       .where(and(...filters));
     const rows = await this.database
       .select({

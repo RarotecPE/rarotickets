@@ -25,7 +25,16 @@ export class ListRegistrationsController extends Controller<NextRequest, NextRes
         : singleEventId
           ? [singleEventId]
           : undefined;
-      const result = await this.useCase.execute({ eventId: singleEventId || undefined, eventIds, query: readText({ value: request.nextUrl.searchParams.get("q") }) || undefined, status: readText({ value: request.nextUrl.searchParams.get("status") }) || undefined, ...pagination, userId: guard.session.user.id, canViewAll: guard.scope.canViewAllEvents });
+      const result = await this.useCase.execute({
+        eventId: singleEventId || undefined,
+        eventIds,
+        query: readText({ value: request.nextUrl.searchParams.get("q") }) || undefined,
+        status: readText({ value: request.nextUrl.searchParams.get("status") }) || undefined,
+        checkInStatus: readText({ value: request.nextUrl.searchParams.get("checkInStatus") }) || undefined,
+        ...pagination,
+        userId: guard.session.user.id,
+        canViewAll: guard.scope.canViewAllEvents,
+      });
       if (result.isFailure) return resultFailureResponse({ error: result.error });
       return jsonSuccess(result.value);
     } catch (error) {
