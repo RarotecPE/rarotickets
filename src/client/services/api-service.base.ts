@@ -1,4 +1,4 @@
-export type HttpMethod = "GET" | "POST" | "PATCH";
+export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 export type HttpRequestParams = { path: string; method: HttpMethod; body?: unknown; query?: Record<string, string | number | boolean | undefined>; signal?: AbortSignal };
 export type HttpResponse<T> = { data: T; meta?: Record<string, unknown> };
 export type HttpClientDependencies = { fetcher?: typeof fetch };

@@ -9,6 +9,8 @@ type KeyboardTrapParams = { event: KeyboardEvent; dialog: HTMLDivElement; onClos
 
 export function Dialog({ open, onClose, title, description, maxWidth = "max-w-lg", children }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const titleId = "dialog-title";
   const descriptionId = "dialog-description";
 
@@ -18,10 +20,12 @@ export function Dialog({ open, onClose, title, description, maxWidth = "max-w-lg
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const dialog = dialogRef.current;
-    const focusable = dialog?.querySelector<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])");
-    focusable?.focus();
+    if (dialog && !dialog.contains(document.activeElement)) {
+      const focusable = dialog.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])");
+      focusable?.focus();
+    }
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (dialog) trapDialogFocus({ event, dialog, onClose });
+      if (dialog) trapDialogFocus({ event, dialog, onClose: () => onCloseRef.current() });
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -29,7 +33,7 @@ export function Dialog({ open, onClose, title, description, maxWidth = "max-w-lg
       document.body.style.overflow = previousOverflow;
       previousFocus?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-app-overlay" onMouseDown={handleBackdropMouseDown({ onClose })}>

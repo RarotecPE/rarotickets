@@ -59,6 +59,16 @@ import { getFileStorageProvider } from "@/server/infrastructure/providers/file-s
 import { getDatabase } from "@/server/infrastructure/persistence/database";
 import { readEnvironment } from "@/server/config/environment.config";
 import type { IPaymentGateway } from "@/modules/ticketing/domain/services/payment-gateway.interface";
+import { DrizzleRaffleRepository } from "@/modules/ticketing/server/infrastructure/persistence/repositories/drizzle-raffle.repository.impl";
+import {
+  ControlEventRaffleUseCase,
+  CreateEventRaffleUseCase,
+  DeleteEventRaffleUseCase,
+  GetEventRaffleUseCase,
+  GetPublicRaffleUseCase,
+  ListEventRafflesUseCase,
+  UpdateEventRaffleUseCase,
+} from "@/modules/ticketing/application/use-cases/raffles/raffles.use-case";
 
 export type TicketingContainer = {
   listPublicEvents: ListPublicEventsUseCase;
@@ -83,6 +93,13 @@ export type TicketingContainer = {
   processPaymentWebhook: ProcessPaymentWebhookUseCase;
   checkIn: CheckInUseCase;
   cancelCheckIn: CancelCheckInUseCase;
+  listEventRaffles: ListEventRafflesUseCase;
+  getEventRaffle: GetEventRaffleUseCase;
+  getPublicRaffle: GetPublicRaffleUseCase;
+  createEventRaffle: CreateEventRaffleUseCase;
+  updateEventRaffle: UpdateEventRaffleUseCase;
+  deleteEventRaffle: DeleteEventRaffleUseCase;
+  controlEventRaffle: ControlEventRaffleUseCase;
   getDashboard: GetDashboardUseCase;
   getReport: GetReportUseCase;
   listAuditLog: ListAuditLogUseCase;
@@ -115,6 +132,7 @@ export function createTicketingContainer(): TicketingContainer {
   const auditRepository = new DrizzleAuditRepository({ database });
   const reportingRepository = new DrizzleReportingRepository({ database });
   const checkInRepository = new DrizzleCheckInRepository({ database });
+  const raffleRepository = new DrizzleRaffleRepository({ database });
   const credentialProvider = new SecureCredentialProvider();
   const outboxRepository = new DrizzleOutboxRepository({ database });
   const certificateRepository = new DrizzleCertificateRepository({
@@ -285,6 +303,25 @@ export function createTicketingContainer(): TicketingContainer {
     }),
     cancelCheckIn: new CancelCheckInUseCase({
       checkInRepository,
+      auditRepository,
+    }),
+    listEventRaffles: new ListEventRafflesUseCase({ raffleRepository }),
+    getEventRaffle: new GetEventRaffleUseCase({ raffleRepository }),
+    getPublicRaffle: new GetPublicRaffleUseCase({ raffleRepository }),
+    createEventRaffle: new CreateEventRaffleUseCase({
+      raffleRepository,
+      auditRepository,
+    }),
+    updateEventRaffle: new UpdateEventRaffleUseCase({
+      raffleRepository,
+      auditRepository,
+    }),
+    deleteEventRaffle: new DeleteEventRaffleUseCase({
+      raffleRepository,
+      auditRepository,
+    }),
+    controlEventRaffle: new ControlEventRaffleUseCase({
+      raffleRepository,
       auditRepository,
     }),
     getDashboard: new GetDashboardUseCase({ reportingRepository }),

@@ -18,11 +18,31 @@ import type {
   CertificateReadModel,
   CertificateBatchResult,
 } from "@/modules/ticketing/domain/repositories/certificate-repository.interface";
+import type {
+  RaffleFilterType,
+  RafflePrizeInput,
+} from "@/modules/ticketing/domain/raffles/entities/raffle.entity";
+import type {
+  PublicRaffleView,
+  RaffleActionType,
+  RaffleDetail,
+  RaffleSummary,
+} from "@/modules/ticketing/domain/raffles/repositories/raffle-repository.interface";
 import {
   ApiService,
   FetchHttpClient,
   type ApiServiceDependencies,
 } from "@/client/services/api-service.base";
+
+export type UpsertRaffleRequest = {
+  title: string;
+  description?: string | null;
+  participantFilter: RaffleFilterType;
+  allowRepeatWinners: boolean;
+  animationDurationSeconds: number;
+  prizes: RafflePrizeInput[];
+  manualRegistrationIds: string[];
+};
 
 export type PublicRegistrationFile = { fieldId: string; file: File };
 export type PublicRegistrationRequest = {
@@ -461,6 +481,97 @@ export class TicketingApiService extends ApiService {
           page: params.page,
           pageSize: params.pageSize,
         },
+      })
+    ).data;
+  }
+
+  async listEventRaffles(params: {
+    eventId: string;
+  }): Promise<RaffleSummary[]> {
+    return (
+      await this.httpClient.request<RaffleSummary[]>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/raffles`,
+        method: "GET",
+      })
+    ).data;
+  }
+
+  async getEventRaffle(params: {
+    eventId: string;
+    raffleId: string;
+  }): Promise<RaffleDetail> {
+    return (
+      await this.httpClient.request<RaffleDetail>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/raffles/${encodeURIComponent(params.raffleId)}`,
+        method: "GET",
+      })
+    ).data;
+  }
+
+  async createEventRaffle(params: {
+    eventId: string;
+    request: UpsertRaffleRequest;
+  }): Promise<RaffleDetail> {
+    return (
+      await this.httpClient.request<RaffleDetail>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/raffles`,
+        method: "POST",
+        body: params.request,
+      })
+    ).data;
+  }
+
+  async updateEventRaffle(params: {
+    eventId: string;
+    raffleId: string;
+    request: UpsertRaffleRequest;
+  }): Promise<RaffleDetail> {
+    return (
+      await this.httpClient.request<RaffleDetail>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/raffles/${encodeURIComponent(params.raffleId)}`,
+        method: "PATCH",
+        body: params.request,
+      })
+    ).data;
+  }
+
+  async deleteEventRaffle(params: {
+    eventId: string;
+    raffleId: string;
+  }): Promise<{ deleted: boolean }> {
+    return (
+      await this.httpClient.request<{ deleted: boolean }>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/raffles/${encodeURIComponent(params.raffleId)}`,
+        method: "DELETE",
+      })
+    ).data;
+  }
+
+  async executeRaffleAction(params: {
+    eventId: string;
+    raffleId: string;
+    action: RaffleActionType;
+    prizeId?: string;
+    reason?: string;
+  }): Promise<RaffleDetail> {
+    return (
+      await this.httpClient.request<RaffleDetail>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/raffles/${encodeURIComponent(params.raffleId)}/action`,
+        method: "POST",
+        body: {
+          action: params.action,
+          prizeId: params.prizeId,
+          reason: params.reason,
+        },
+      })
+    ).data;
+  }
+
+  async getPublicRaffle(params: { token: string }): Promise<PublicRaffleView> {
+    return (
+      await this.httpClient.request<PublicRaffleView>({
+        path: `/api/v1/public/raffles/${encodeURIComponent(params.token)}`,
+        method: "GET",
       })
     ).data;
   }

@@ -21,6 +21,9 @@ export const registrationStatusEnum = pgEnum("registration_status", ["pendente",
 export const paymentStatusEnum = pgEnum("payment_status", ["aguardando", "pago", "recusado", "cancelado", "expirado", "estornado"]);
 export const discountTypeEnum = pgEnum("discount_type", ["percentual", "valor_fixo", "cortesia"]);
 export const formFieldTypeEnum = pgEnum("form_field_type", ["texto", "texto_longo", "numero", "data", "email", "telefone", "cpf", "cnpj", "select", "checkbox", "boolean", "arquivo"]);
+export const raffleStatusEnum = pgEnum("raffle_status", ["rascunho", "em_andamento", "concluido", "cancelado"]);
+export const raffleFilterEnum = pgEnum("raffle_filter", ["todos", "pagantes", "presentes", "manual"]);
+export const rafflePrizeStatusEnum = pgEnum("raffle_prize_status", ["pendente", "sorteando", "sorteado", "anulado"]);
 
 const createdAt = () => timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull();
@@ -328,6 +331,71 @@ export const registrationFiles = pgTable("registration_files", {
   updatedAt: updatedAt(),
 }, (table) => [index("registration_files_registration_idx").on(table.registrationId)]);
 
+export const raffles = pgTable("raffles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  eventId: uuid("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 150 }).notNull(),
+  description: text("description"),
+  participantFilter: raffleFilterEnum("participant_filter").default("todos").notNull(),
+  allowRepeatWinners: boolean("allow_repeat_winners").default(false).notNull(),
+  animationDurationSeconds: integer("animation_duration_seconds").default(7).notNull(),
+  status: raffleStatusEnum("status").default("rascunho").notNull(),
+  publicToken: varchar("public_token", { length: 64 }).notNull(),
+  currentPrizeId: uuid("current_prize_id"),
+  showWinnersSummary: boolean("show_winners_summary").default(false).notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+  completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  uniqueIndex("raffles_public_token_unique").on(table.publicToken),
+  index("raffles_event_id_idx").on(table.eventId, table.createdAt),
+]);
+
+export const rafflePrizes = pgTable("raffle_prizes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  raffleId: uuid("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 150 }).notNull(),
+  description: text("description"),
+  orderIndex: integer("order_index").notNull(),
+  status: rafflePrizeStatusEnum("status").default("pendente").notNull(),
+  winnerRegistrationId: uuid("winner_registration_id").references(() => registrations.id, { onDelete: "set null" }),
+  winnerParticipantId: uuid("winner_participant_id").references(() => participants.id, { onDelete: "set null" }),
+  winnerName: varchar("winner_name", { length: 255 }),
+  winnerTicketCode: varchar("winner_ticket_code", { length: 50 }),
+  drawnAt: timestamp("drawn_at", { withTimezone: true, mode: "date" }),
+  disqualificationReason: text("disqualification_reason"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  index("raffle_prizes_raffle_id_order_idx").on(table.raffleId, table.orderIndex),
+]);
+
+export const raffleManualParticipants = pgTable("raffle_manual_participants", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  raffleId: uuid("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }),
+  registrationId: uuid("registration_id").notNull().references(() => registrations.id, { onDelete: "cascade" }),
+  createdAt: createdAt(),
+}, (table) => [
+  uniqueIndex("raffle_manual_participants_unique").on(table.raffleId, table.registrationId),
+]);
+
+export const raffleDrawHistory = pgTable("raffle_draw_history", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  raffleId: uuid("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }),
+  prizeId: uuid("prize_id").notNull().references(() => rafflePrizes.id, { onDelete: "cascade" }),
+  winnerRegistrationId: uuid("winner_registration_id").references(() => registrations.id, { onDelete: "set null" }),
+  winnerName: varchar("winner_name", { length: 255 }).notNull(),
+  winnerTicketCode: varchar("winner_ticket_code", { length: 50 }),
+  action: varchar("action", { length: 50 }).notNull(),
+  reason: text("reason"),
+  drawnByUserId: varchar("drawn_by_user_id", { length: 128 }),
+  drawnByUserName: varchar("drawn_by_user_name", { length: 255 }),
+  createdAt: createdAt(),
+}, (table) => [
+  index("raffle_draw_history_raffle_idx").on(table.raffleId, table.createdAt),
+]);
+
 export type EventRow = typeof events.$inferSelect;
 export type NewEventRow = typeof events.$inferInsert;
 export type ParticipantRow = typeof participants.$inferSelect;
@@ -336,3 +404,7 @@ export type ParticipantAuthTokenRow = typeof participantAuthTokens.$inferSelect;
 export type NewParticipantAuthTokenRow = typeof participantAuthTokens.$inferInsert;
 export type RegistrationRow = typeof registrations.$inferSelect;
 export type PaymentRow = typeof payments.$inferSelect;
+export type RaffleRow = typeof raffles.$inferSelect;
+export type NewRaffleRow = typeof raffles.$inferInsert;
+export type RafflePrizeRow = typeof rafflePrizes.$inferSelect;
+export type NewRafflePrizeRow = typeof rafflePrizes.$inferInsert;

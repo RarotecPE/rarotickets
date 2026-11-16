@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { ticketingApi } from "@/client/services/ticketing-api.service";
 import { useAuth } from "@/components/auth-provider";
+import { EventRafflesPanel } from "@/components/event-raffles-panel";
 import {
   Badge,
   Button,
@@ -408,6 +409,7 @@ export function ManagedEventDetail({ eventId }: ManagedEventDetailProps) {
         <EventFacts event={event} />
         <EventOwner event={event} />
       </div>
+      <EventRafflesPanel eventId={event.id} canWrite={canWrite} />
       <LotsPanel event={event} />
       <FormFieldsPanel event={event} />
       <ActivitiesPanel event={event} />
