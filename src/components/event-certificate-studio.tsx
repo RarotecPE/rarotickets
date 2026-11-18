@@ -2345,32 +2345,81 @@ export function EventCertificateStudio({
                       className="pointer-events-none block h-full w-full"
                     />
 
-                    {/* Caixas de Texto Interativas (exibidas apenas no modo interactive) */}
+                    {/* Camada SVG de renderização tipográfica 1:1 com o PDF (dominant-baseline="alphabetic") */}
+                    {viewMode === "interactive" && (
+                      <svg
+                        className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+                        viewBox={`0 0 ${pdfSize.width} ${pdfSize.height}`}
+                      >
+                        {layoutConfig.fields.map((field) => {
+                          const resolvedPreview =
+                            interpolateCertificateTemplate({
+                              template: field.template,
+                              variables: sampleVariables,
+                            }) || field.label;
+
+                          const boxWidthPt =
+                            field.maxWidth && field.maxWidth > 40
+                              ? field.maxWidth
+                              : 440;
+
+                          let drawX = field.x;
+                          let textAnchor: "start" | "middle" | "end" = "start";
+                          if (field.align === "center") {
+                            drawX = field.x + boxWidthPt / 2;
+                            textAnchor = "middle";
+                          } else if (field.align === "right") {
+                            drawX = field.x + boxWidthPt;
+                            textAnchor = "end";
+                          }
+
+                          const fontMeta = AVAILABLE_FONTS.find(
+                            (f) => f.value === field.fontFamily,
+                          );
+
+                          return (
+                            <text
+                              key={`svg-text-${field.id}`}
+                              x={drawX}
+                              y={pdfSize.height - field.y}
+                              textAnchor={textAnchor}
+                              dominantBaseline="alphabetic"
+                              fontFamily={
+                                fontMeta?.cssFont ||
+                                "Helvetica, Arial, sans-serif"
+                              }
+                              fontWeight={
+                                field.fontFamily.includes("Bold") ? 700 : 400
+                              }
+                              fontSize={field.fontSize || 20}
+                              fill={field.colorHex || "#000000"}
+                              xmlSpace="preserve"
+                            >
+                              {resolvedPreview}
+                            </text>
+                          );
+                        })}
+                      </svg>
+                    )}
+
+                    {/* Caixas de Seleção e Controle Interativo (exibidas apenas no modo interactive) */}
                     {viewMode === "interactive" &&
                       layoutConfig.fields.map((field) => {
                         const isSelected = activeField?.id === field.id;
-                        const resolvedPreview =
-                          interpolateCertificateTemplate({
-                            template: field.template,
-                            variables: sampleVariables,
-                          }) || field.label;
-
                         const boxWidthPt =
                           field.maxWidth && field.maxWidth > 40
                             ? field.maxWidth
                             : 440;
                         const leftPercent = (field.x / pdfSize.width) * 100;
                         const widthPercent = (boxWidthPt / pdfSize.width) * 100;
-                        const bottomPercent = (field.y / pdfSize.height) * 100;
 
-                        const fontSizePx = Math.max(
-                          8,
-                          field.fontSize * stageScale,
-                        );
-
-                        const fontMeta = AVAILABLE_FONTS.find(
-                          (f) => f.value === field.fontFamily,
-                        );
+                        const fontPt = field.fontSize || 20;
+                        // O baseline no PDF fica exatamente em field.y.
+                        // O retângulo de seleção engloba do descender (~0.25*fontPt) até o ascender (~0.80*fontPt):
+                        const bottomPt = field.y - 0.25 * fontPt;
+                        const heightPt = 1.05 * fontPt;
+                        const bottomPercent = (bottomPt / pdfSize.height) * 100;
+                        const heightPercent = (heightPt / pdfSize.height) * 100;
 
                         return (
                           <div
@@ -2394,7 +2443,7 @@ export function EventCertificateStudio({
                               left: `${leftPercent}%`,
                               bottom: `${bottomPercent}%`,
                               width: `${widthPercent}%`,
-                              textAlign: field.align,
+                              height: `${heightPercent}%`,
                             }}
                             className={cn(
                               "group cursor-move transition-colors",
@@ -2404,26 +2453,6 @@ export function EventCertificateStudio({
                             )}
                             title="Arraste para posicionar a caixa no certificado"
                           >
-                            {/* Texto com a linha de base tipográfica 1:1 com o pdf-lib (sem borda interna empurrando 2px para cima) */}
-                            <div
-                              style={{
-                                fontFamily:
-                                  fontMeta?.cssFont ||
-                                  "Helvetica, Arial, sans-serif",
-                                fontWeight: field.fontFamily.includes("Bold")
-                                  ? 700
-                                  : 400,
-                                fontSize: `${fontSizePx}px`,
-                                lineHeight: 1,
-                                color: field.colorHex || "#000000",
-                                whiteSpace: "nowrap",
-                                overflow: "visible",
-                                transform: "translateY(22%)",
-                              }}
-                            >
-                              {resolvedPreview}
-                            </div>
-
                             {/* Etiqueta Superior */}
                             <span className="pointer-events-none absolute -top-5 left-0 z-20 rounded bg-slate-900/90 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white whitespace-nowrap shadow">
                               {field.label} ({field.x}, {field.y})

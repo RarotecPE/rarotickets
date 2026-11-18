@@ -28,7 +28,31 @@ function parseApplication(value: unknown): NexusApplication | null {
   const homepage = readText(value.homepage_url);
   if (!name || !clientId || !homepage) return null;
   const logoUrl = readText(value.logo_url);
-  return { nome: name, client_id: clientId, logo_url: logoUrl || null, homepage_url: homepage };
+  const launchUrl = resolveApplicationLaunchUrl({ client_id: clientId, homepage_url: homepage });
+  return { nome: name, client_id: clientId, logo_url: logoUrl || null, homepage_url: launchUrl };
+}
+
+export function resolveApplicationLaunchUrl(application: { client_id: string; homepage_url: string }): string {
+  if (!application.homepage_url) return "#";
+  if (application.client_id === "raronexus") {
+    try {
+      return new URL("/home", application.homepage_url).toString();
+    } catch {
+      return application.homepage_url;
+    }
+  }
+
+  try {
+    const raw = new URL(application.homepage_url);
+    const startUrl = new URL("/api/auth/raronexus/start", raw.origin);
+    const nextPath = raw.pathname && raw.pathname !== "/"
+      ? raw.pathname
+      : (application.client_id.startsWith("rarotickets") ? "/painel" : "/dashboard");
+    startUrl.searchParams.set("next", nextPath);
+    return startUrl.toString();
+  } catch {
+    return application.homepage_url;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

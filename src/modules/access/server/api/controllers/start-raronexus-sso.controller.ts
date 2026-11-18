@@ -10,7 +10,7 @@ export class StartRaroNexusSsoController extends Controller<NextRequest, NextRes
     const environment = readEnvironment();
     const nextPath = request.nextUrl.searchParams.get("next") ?? "/painel";
     const state = createSsoState({ nextPath });
-    const silent = request.nextUrl.searchParams.get("mode") !== "interactive";
+    const silent = request.nextUrl.searchParams.get("mode") === "silent";
     try {
       const redirectUri = `${environment.appBaseUrl}/api/auth/raronexus/callback`;
       const authorizationUrl = buildAuthorizationUrl({ state: state.state, redirectUri, silent });
