@@ -24,6 +24,7 @@ import type {
 } from "@/modules/ticketing/domain/repositories/certificate-repository.interface";
 import type {
   CertificateEmailConfig,
+  CertificateEmailExtraAttachment,
   CertificateLayoutConfig,
   CertificateSelectionConfig,
   CertificateWorkflowStatus,
@@ -661,6 +662,45 @@ export class TicketingApiService extends ApiService {
         path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/certificates/template`,
         method: "POST",
         body: formData,
+      })
+    ).data;
+  }
+
+  async uploadCertificateAttachment(params: {
+    eventId: string;
+    file: File;
+  }): Promise<{
+    attachment: CertificateEmailExtraAttachment;
+    extraAttachments: CertificateEmailExtraAttachment[];
+  }> {
+    const formData = new FormData();
+    formData.set("file", params.file);
+    return (
+      await this.httpClient.request<{
+        attachment: CertificateEmailExtraAttachment;
+        extraAttachments: CertificateEmailExtraAttachment[];
+      }>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/certificates/attachments`,
+        method: "POST",
+        body: formData,
+      })
+    ).data;
+  }
+
+  async deleteCertificateAttachment(params: {
+    eventId: string;
+    attachmentId: string;
+  }): Promise<{
+    deleted: boolean;
+    extraAttachments: CertificateEmailExtraAttachment[];
+  }> {
+    return (
+      await this.httpClient.request<{
+        deleted: boolean;
+        extraAttachments: CertificateEmailExtraAttachment[];
+      }>({
+        path: `/api/v1/admin/events/${encodeURIComponent(params.eventId)}/certificates/attachments?attachmentId=${encodeURIComponent(params.attachmentId)}`,
+        method: "DELETE",
       })
     ).data;
   }

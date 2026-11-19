@@ -285,7 +285,7 @@ export function ManagedEventDetail({ eventId }: ManagedEventDetailProps) {
               Gerenciar certificados
             </Link>
           ) : null}
-          {event.props.status !== "finalizado" && canWrite ? (
+          {canWrite ? (
             <Link
               href={`/painel/eventos/${event.id}/editar`}
               className="inline-flex h-9 items-center gap-2 rounded-app-md border border-app-border bg-app-surface-elevated px-3 text-xs font-semibold text-app-foreground hover:bg-app-surface"

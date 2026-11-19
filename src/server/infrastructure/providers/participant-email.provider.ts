@@ -581,6 +581,7 @@ export class ParticipantEmailProvider implements IParticipantEmailSender {
           contentType: "application/pdf",
           contentBase64: params.attachmentBase64,
         },
+        ...(params.extraAttachments ?? []),
       ],
       metadata: {
         origin: "modulo-certificados",

@@ -248,5 +248,56 @@ describe("ParticipantEmailProvider", () => {
       amountCents: 5000,
     });
   });
+
+  it("envia o certificado em PDF junto com anexos extras quando informados", async () => {
+    let capturedOptions: SendEmailOptions | null = null;
+    const mockClient = {
+      send: vi.fn().mockImplementation((options: SendEmailOptions) => {
+        capturedOptions = options;
+        return Promise.resolve({ sent: true, messageId: "msg-cert-extra" });
+      }),
+    } as unknown as RaroNexusEmailClient;
+
+    const provider = new ParticipantEmailProvider(mockClient);
+
+    const res = await provider.sendCertificateEmail({
+      toEmail: "aluno@teste.com",
+      subject: "Seu Certificado",
+      bodyText: "Parabéns pela participação.",
+      participantName: "Carlos Souza",
+      eventTitle: "Fórum RaroTech",
+      workloadHours: 6,
+      authenticationCode: "CERT-2026-0001",
+      verificationUrl: "http://localhost:3005/certificados/CERT-2026-0001",
+      attachmentFilename: "Certificado - Carlos Souza.pdf",
+      attachmentBase64: "JVBERi0xLjQK",
+      extraAttachments: [
+        {
+          filename: "Material Complementar.pdf",
+          contentType: "application/pdf",
+          contentBase64: "JVBERi0xLjQK",
+        },
+        {
+          filename: "Slides.pptx",
+          contentType:
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          contentBase64: "UEsDBBQAAAAI",
+        },
+      ],
+    });
+
+    expect(res.sent).toBe(true);
+    expect(capturedOptions).not.toBeNull();
+    expect(capturedOptions!.attachments).toHaveLength(3);
+    expect(capturedOptions!.attachments![0].filename).toBe(
+      "Certificado - Carlos Souza.pdf",
+    );
+    expect(capturedOptions!.attachments![1]).toEqual({
+      filename: "Material Complementar.pdf",
+      contentType: "application/pdf",
+      contentBase64: "JVBERi0xLjQK",
+    });
+    expect(capturedOptions!.attachments![2].filename).toBe("Slides.pptx");
+  });
 });
 

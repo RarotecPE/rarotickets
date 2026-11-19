@@ -50,6 +50,12 @@ export type SendPixPendingNotificationEmailParams = {
   reservationExpiresAt?: Date | null;
 };
 
+export type CertificateEmailExtraAttachmentPayload = {
+  filename: string;
+  contentType: string;
+  contentBase64: string;
+};
+
 export type SendCertificateEmailParams = {
   toEmail: string;
   subject: string;
@@ -61,6 +67,7 @@ export type SendCertificateEmailParams = {
   verificationUrl: string;
   attachmentFilename: string;
   attachmentBase64: string;
+  extraAttachments?: CertificateEmailExtraAttachmentPayload[];
   isTest?: boolean;
 };
 

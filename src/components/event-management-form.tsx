@@ -321,7 +321,6 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
   const [totalRegistrations, setTotalRegistrations] = useState(0);
   const [pendingRequest, setPendingRequest] = useState<CreateEventRequest | null>(null);
   const [loadingEvent, setLoadingEvent] = useState(isEditing);
-  const [isFinalized, setIsFinalized] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -344,9 +343,6 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
         setLoadingEvent(true);
         const data = await ticketingApi.getManagedEvent({ eventId: eventId! });
         if (!active) return;
-        if (data.props.status === "finalizado") {
-          setIsFinalized(true);
-        }
         const loadedFields: FieldDraft[] = data.formFields.map((field) => ({
           rowId: field.id || createRowId(),
           label: field.label,
@@ -775,23 +771,6 @@ export function EventManagementForm({ eventId }: EventManagementFormProps = {}) 
           <Spinner label="Carregando dados do evento…" />
         </div>
       </Panel>
-    );
-  }
-
-  if (isFinalized) {
-    return (
-      <div className="flex flex-col gap-4">
-        <InlineAlert tone="danger">
-          Este evento está finalizado e não pode ser editado.
-        </InlineAlert>
-        <Link
-          href={`/painel/eventos/${eventId}`}
-          className="inline-flex min-h-8 items-center gap-2 text-xs font-semibold text-app-primary hover:underline"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Voltar aos detalhes do evento
-        </Link>
-      </div>
     );
   }
 

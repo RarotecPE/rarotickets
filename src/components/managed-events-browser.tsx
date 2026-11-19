@@ -252,7 +252,7 @@ function EventTableRow({ event, canWrite }: EventTableRowProps) {
       </td>
       <td className="px-4 py-3 text-right sm:px-5">
         <div className="flex items-center justify-end gap-3">
-          {event.props.status !== "finalizado" && canWrite ? (
+          {canWrite ? (
             <Link
               href={`/painel/eventos/${event.id}/editar`}
               className="text-xs font-semibold text-app-foreground hover:text-app-primary hover:underline"

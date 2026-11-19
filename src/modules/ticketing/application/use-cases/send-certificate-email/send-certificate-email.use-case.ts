@@ -185,6 +185,26 @@ export class SendCertificateEmailUseCase extends UseCase<
       );
     }
 
+    const extraAttachments: Array<{
+      filename: string;
+      contentType: string;
+      contentBase64: string;
+    }> = [];
+    for (const extra of workspace.emailConfig.extraAttachments ?? []) {
+      const storedExtra = await this.fileStorageProvider.read({
+        key: extra.key,
+      });
+      if (!storedExtra) continue;
+      extraAttachments.push({
+        filename: extra.filename,
+        contentType:
+          extra.contentType ||
+          storedExtra.contentType ||
+          "application/octet-stream",
+        contentBase64: uint8ArrayToBase64({ bytes: storedExtra.content }),
+      });
+    }
+
     try {
       const sendResult = await this.emailSender.sendCertificateEmail({
         toEmail,
@@ -197,6 +217,7 @@ export class SendCertificateEmailUseCase extends UseCase<
         verificationUrl,
         attachmentFilename,
         attachmentBase64,
+        extraAttachments,
         isTest,
       });
 

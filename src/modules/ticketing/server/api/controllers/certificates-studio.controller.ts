@@ -12,6 +12,10 @@ import {
   CreateCertificatePresetUseCase,
   DeleteCertificatePresetUseCase,
 } from "@/modules/ticketing/application/use-cases/manage-certificate-presets/manage-certificate-presets.use-case";
+import {
+  DeleteCertificateAttachmentUseCase,
+  UploadCertificateAttachmentUseCase,
+} from "@/modules/ticketing/application/use-cases/manage-certificate-attachments/manage-certificate-attachments.use-case";
 import { RenderCertificatePdfUseCase } from "@/modules/ticketing/application/use-cases/render-certificate-pdf/render-certificate-pdf.use-case";
 import { SendCertificateEmailUseCase } from "@/modules/ticketing/application/use-cases/send-certificate-email/send-certificate-email.use-case";
 import type {
@@ -556,6 +560,105 @@ export class RenderCertificatePdfController extends Controller<
           "Cache-Control": "no-store",
         },
       });
+    } catch (error) {
+      return internalErrorResponse(error);
+    }
+  }
+}
+
+export type UploadCertificateAttachmentControllerDependencies = {
+  useCase: UploadCertificateAttachmentUseCase;
+};
+
+export class UploadCertificateAttachmentController extends Controller<
+  EventScopedControllerRequest,
+  NextResponse
+> {
+  private readonly useCase: UploadCertificateAttachmentUseCase;
+
+  constructor(dependencies: UploadCertificateAttachmentControllerDependencies) {
+    super();
+    this.useCase = dependencies.useCase;
+  }
+
+  async handle(input: EventScopedControllerRequest): Promise<NextResponse> {
+    const guard = await requirePermission({
+      request: input.request,
+      permission: "certificates:write",
+    });
+    if (!guard.ok) return guard.response;
+
+    try {
+      const formData = await input.request.formData();
+      const file = formData.get("file");
+      if (!file || typeof file === "string") {
+        return jsonError({
+          code: "FILE_REQUIRED",
+          message: "Selecione um arquivo para anexar.",
+          status: 400,
+        });
+      }
+
+      const result = await this.useCase.execute({
+        eventId: input.eventId,
+        userId: guard.session.user.id,
+        userName: guard.session.user.nome,
+        canViewAll: guard.scope.canViewAllEvents,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+        originalName: file.name || "anexo",
+        content: new Uint8Array(await file.arrayBuffer()),
+        ip: getClientIp(input.request),
+      });
+
+      if (result.isFailure) {
+        return resultFailureResponse({ error: result.error, status: 422 });
+      }
+      return jsonSuccess(result.value, 201);
+    } catch (error) {
+      return internalErrorResponse(error);
+    }
+  }
+}
+
+export type DeleteCertificateAttachmentControllerDependencies = {
+  useCase: DeleteCertificateAttachmentUseCase;
+};
+
+export class DeleteCertificateAttachmentController extends Controller<
+  EventScopedControllerRequest,
+  NextResponse
+> {
+  private readonly useCase: DeleteCertificateAttachmentUseCase;
+
+  constructor(dependencies: DeleteCertificateAttachmentControllerDependencies) {
+    super();
+    this.useCase = dependencies.useCase;
+  }
+
+  async handle(input: EventScopedControllerRequest): Promise<NextResponse> {
+    const guard = await requirePermission({
+      request: input.request,
+      permission: "certificates:write",
+    });
+    if (!guard.ok) return guard.response;
+
+    try {
+      const attachmentId =
+        input.request.nextUrl.searchParams.get("attachmentId") ?? "";
+      const result = await this.useCase.execute({
+        eventId: input.eventId,
+        userId: guard.session.user.id,
+        userName: guard.session.user.nome,
+        canViewAll: guard.scope.canViewAllEvents,
+        attachmentId,
+        ip: getClientIp(input.request),
+      });
+
+      if (result.isFailure) {
+        return resultFailureResponse({ error: result.error, status: 422 });
+      }
+      return jsonSuccess(result.value);
     } catch (error) {
       return internalErrorResponse(error);
     }

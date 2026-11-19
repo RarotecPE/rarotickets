@@ -29,11 +29,13 @@ import {
   Eye,
   FileCheck2,
   FileDown,
+  FileText,
   FolderArchive,
   Loader2,
   MailCheck,
   Move,
   Palette,
+  Paperclip,
   Pause,
   Play,
   Plus,
@@ -236,6 +238,13 @@ export function EventCertificateStudio({
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<
+    string | null
+  >(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [isDraggingAttachment, setIsDraggingAttachment] = useState(false);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [isQueueRunning, setIsQueueRunning] = useState(false);
   const [sendingRecipientKey, setSendingRecipientKey] = useState<string | null>(
     null,
@@ -742,7 +751,9 @@ export function EventCertificateStudio({
         templatePdfKey,
         templatePdfName,
         layoutConfig,
-        emailConfig,
+        emailConfig: emailConfig
+          ? { ...emailConfig, extraAttachments: [] }
+          : null,
         workloadHoursDefault: workloadHours,
       });
       setPresets([created, ...presets]);
@@ -793,7 +804,10 @@ export function EventCertificateStudio({
       setSelectedFieldId(clonedLayout.fields[0].id);
     }
     if (preset.emailConfig) {
-      setEmailConfig({ ...preset.emailConfig });
+      setEmailConfig({
+        ...preset.emailConfig,
+        extraAttachments: emailConfig?.extraAttachments ?? [],
+      });
     }
     if (preset.workloadHoursDefault) {
       setWorkloadHours(preset.workloadHoursDefault);
@@ -990,6 +1004,62 @@ export function EventCertificateStudio({
   }
 
   // Step 4: RaroNexus Email Dispatch
+  async function handleUploadExtraAttachments(
+    files: FileList | File[] | null,
+  ): Promise<void> {
+    const list = files ? Array.from(files) : [];
+    if (list.length === 0 || uploadingAttachment || isQueueRunning) return;
+
+    setUploadingAttachment(true);
+    setAttachmentError(null);
+
+    try {
+      for (const file of list) {
+        const res = await ticketingApi.uploadCertificateAttachment({
+          eventId,
+          file,
+        });
+        setEmailConfig((prev) =>
+          prev ? { ...prev, extraAttachments: res.extraAttachments } : prev,
+        );
+      }
+    } catch (caught) {
+      setAttachmentError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível anexar o arquivo.",
+      );
+    } finally {
+      setUploadingAttachment(false);
+    }
+  }
+
+  async function handleDeleteExtraAttachment(
+    attachmentId: string,
+  ): Promise<void> {
+    if (deletingAttachmentId || isQueueRunning) return;
+    setDeletingAttachmentId(attachmentId);
+    setAttachmentError(null);
+
+    try {
+      const res = await ticketingApi.deleteCertificateAttachment({
+        eventId,
+        attachmentId,
+      });
+      setEmailConfig((prev) =>
+        prev ? { ...prev, extraAttachments: res.extraAttachments } : prev,
+      );
+    } catch (caught) {
+      setAttachmentError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível remover o anexo.",
+      );
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  }
+
   async function handleSendTestEmail(): Promise<void> {
     if (!testRecipientEmail.trim() || isSendingTest) return;
     setIsSendingTest(true);
@@ -2789,6 +2859,140 @@ export function EventCertificateStudio({
                   ) : null}
                 </div>
               </Panel>
+
+              <Panel>
+                <PanelHeader
+                  title="Anexos Extras"
+                  right={
+                    <div className="flex items-center gap-2">
+                      {(emailConfig.extraAttachments?.length ?? 0) > 0 ? (
+                        <Badge tone="muted">
+                          {emailConfig.extraAttachments?.length}
+                        </Badge>
+                      ) : null}
+                      <Button
+                        type="button"
+                        compact
+                        variant="secondary"
+                        disabled={uploadingAttachment || isQueueRunning}
+                        onClick={() => attachmentInputRef.current?.click()}
+                      >
+                        {uploadingAttachment ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Plus className="h-3.5 w-3.5" />
+                        )}
+                        Anexar
+                      </Button>
+                    </div>
+                  }
+                />
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (!isQueueRunning && !uploadingAttachment) {
+                      setIsDraggingAttachment(true);
+                    }
+                  }}
+                  onDragLeave={() => setIsDraggingAttachment(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingAttachment(false);
+                    if (!isQueueRunning && !uploadingAttachment) {
+                      void handleUploadExtraAttachments(e.dataTransfer.files);
+                    }
+                  }}
+                  className={cn(
+                    "space-y-3 p-4 transition-colors sm:p-5",
+                    isDraggingAttachment && "bg-app-primary/5",
+                  )}
+                >
+                  <input
+                    ref={attachmentInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    disabled={uploadingAttachment || isQueueRunning}
+                    onChange={(e) => {
+                      void handleUploadExtraAttachments(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+
+                  {(emailConfig.extraAttachments?.length ?? 0) === 0 ? (
+                    <button
+                      type="button"
+                      disabled={uploadingAttachment || isQueueRunning}
+                      onClick={() => attachmentInputRef.current?.click()}
+                      className={cn(
+                        "flex w-full items-center justify-center gap-2 rounded-app-md border border-dashed px-3 py-4 text-xs font-medium text-app-muted-foreground transition-colors cursor-pointer disabled:opacity-50",
+                        isDraggingAttachment
+                          ? "border-app-primary text-app-primary"
+                          : "border-app-border hover:border-app-primary hover:text-app-foreground",
+                      )}
+                    >
+                      {uploadingAttachment ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin text-app-primary" />
+                          <span>Enviando…</span>
+                        </>
+                      ) : (
+                        <>
+                          <Paperclip className="h-4 w-4" />
+                          <span>Arraste arquivos ou clique para anexar</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {(emailConfig.extraAttachments ?? []).map((att) => {
+                        const isRemoving = deletingAttachmentId === att.id;
+                        return (
+                          <li
+                            key={att.id}
+                            className="flex items-center justify-between gap-2 rounded-app-md border border-app-border bg-app-surface px-3 py-2 text-xs"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <FileText className="h-3.5 w-3.5 shrink-0 text-app-primary" />
+                              <span
+                                className="truncate font-medium text-app-foreground"
+                                title={att.filename}
+                              >
+                                {att.filename}
+                              </span>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="font-mono text-[11px] text-app-muted-foreground">
+                                {formatAttachmentSize(att.sizeBytes)}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={isRemoving || isQueueRunning}
+                                onClick={() =>
+                                  void handleDeleteExtraAttachment(att.id)
+                                }
+                                title="Remover anexo"
+                                aria-label={`Remover ${att.filename}`}
+                                className="rounded p-1 text-app-muted-foreground hover:bg-app-surface-elevated hover:text-app-danger disabled:opacity-50 cursor-pointer"
+                              >
+                                {isRemoving ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <X className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+
+                  {attachmentError ? (
+                    <InlineAlert tone="danger">{attachmentError}</InlineAlert>
+                  ) : null}
+                </div>
+              </Panel>
             </div>
 
             {/* Coluna Direita: Apenas Corpo da Mensagem (7 cols) */}
@@ -3082,4 +3286,11 @@ export function EventCertificateStudio({
       ) : null}
     </div>
   );
+}
+
+function formatAttachmentSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 KB";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
 }

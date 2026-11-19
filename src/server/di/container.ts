@@ -30,6 +30,10 @@ import {
   CreateCertificatePresetUseCase,
   DeleteCertificatePresetUseCase,
 } from "@/modules/ticketing/application/use-cases/manage-certificate-presets/manage-certificate-presets.use-case";
+import {
+  DeleteCertificateAttachmentUseCase,
+  UploadCertificateAttachmentUseCase,
+} from "@/modules/ticketing/application/use-cases/manage-certificate-attachments/manage-certificate-attachments.use-case";
 import { RenderCertificatePdfUseCase } from "@/modules/ticketing/application/use-cases/render-certificate-pdf/render-certificate-pdf.use-case";
 import { SendCertificateEmailUseCase } from "@/modules/ticketing/application/use-cases/send-certificate-email/send-certificate-email.use-case";
 import { CertificateTemplateFileDomainService } from "@/modules/ticketing/domain/certificates/services/certificate-template-file.domain-service";
@@ -126,6 +130,8 @@ export type TicketingContainer = {
   saveEventCertificateWorkspace: SaveEventCertificateWorkspaceUseCase;
   uploadCertificateTemplate: UploadCertificateTemplateUseCase;
   getCertificateTemplatePdf: GetCertificateTemplatePdfUseCase;
+  uploadCertificateAttachment: UploadCertificateAttachmentUseCase;
+  deleteCertificateAttachment: DeleteCertificateAttachmentUseCase;
   createCertificatePreset: CreateCertificatePresetUseCase;
   deleteCertificatePreset: DeleteCertificatePresetUseCase;
   renderCertificatePdf: RenderCertificatePdfUseCase;
@@ -383,6 +389,17 @@ export function createTicketingContainer(): TicketingContainer {
     getCertificateTemplatePdf: new GetCertificateTemplatePdfUseCase({
       certificateRepository,
       fileStorageProvider,
+    }),
+    uploadCertificateAttachment: new UploadCertificateAttachmentUseCase({
+      certificateRepository,
+      fileStorageProvider,
+      idGenerator,
+      auditRepository,
+    }),
+    deleteCertificateAttachment: new DeleteCertificateAttachmentUseCase({
+      certificateRepository,
+      fileStorageProvider,
+      auditRepository,
     }),
     createCertificatePreset: new CreateCertificatePresetUseCase({
       certificateRepository,

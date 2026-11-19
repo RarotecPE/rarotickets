@@ -183,13 +183,20 @@ describe("UpdateEventUseCase", () => {
     expect(result.value.props.status).toBe("inscricoes_abertas");
   });
 
-  it("bloqueia edição de eventos finalizados com erro descritivo", async () => {
-    currentEvent = createFakeEventReadModel({ status: "finalizado" });
+  it("permite editar dados de eventos finalizados mantendo o status finalizado", async () => {
+    currentEvent = {
+      ...createFakeEventReadModel({ status: "finalizado" }),
+      capacity: { confirmed: 20, reserved: 0, waitlisted: 5 },
+    };
+    const mockPromoteWaitlist = {
+      execute: vi.fn(),
+    };
 
     const useCase = new UpdateEventUseCase({
       eventRepository: mockEventRepo,
       auditRepository: mockAuditRepo,
       idGenerator: mockIdGen,
+      promoteWaitlist: mockPromoteWaitlist as never,
     });
 
     const result = await useCase.execute({
@@ -199,22 +206,25 @@ describe("UpdateEventUseCase", () => {
       canViewAll: false,
       ip: null,
       props: createFakeEventEditableProps({
-        title: "Tentativa de Edição",
-        description: "Descrição de teste para evento finalizado bloqueado.",
-        summary: "Resumo curto de teste válido.",
-        slug: "tentativa-edicao",
-        maxCapacity: 100,
+        title: "Evento Finalizado Atualizado",
+        description: "Descrição atualizada após a finalização do evento.",
+        summary: "Resumo atualizado com sucesso.",
+        slug: "evento-finalizado-atualizado",
+        maxCapacity: 120,
         allowsWaitlist: false,
         onlineUrl: "https://zoom.us/j/123",
-        certificateEnabled: false,
-        workloadHours: 0,
-        certificateDescription: null,
+        certificateEnabled: true,
+        workloadHours: 6,
+        certificateDescription: "Descrição revisada do certificado.",
       }),
     });
 
-    expect(result.isFailure).toBe(true);
-    expect(result.error.message).toBe("Eventos finalizados não podem ser editados.");
-    expect(auditLogs).toHaveLength(0);
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.props.title).toBe("Evento Finalizado Atualizado");
+    expect(result.value.props.status).toBe("finalizado");
+    expect(auditLogs).toHaveLength(1);
+    expect(auditLogs[0].action).toBe("event.updated");
+    expect(mockPromoteWaitlist.execute).not.toHaveBeenCalled();
   });
 
   it("falha quando o evento não é encontrado", async () => {

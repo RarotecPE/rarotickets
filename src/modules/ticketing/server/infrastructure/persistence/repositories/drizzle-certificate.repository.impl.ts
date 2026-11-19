@@ -6,6 +6,7 @@ import {
 } from "@/modules/ticketing/domain/certificates/services/certificate-text.domain-service";
 import type {
   CertificateEmailConfig,
+  CertificateEmailExtraAttachment,
   CertificateLayoutConfig,
   CertificateSelectionConfig,
   CertificateWorkflowStatus,
@@ -945,7 +946,15 @@ export class DrizzleCertificateRepository extends CertificateRepository {
         ? { layoutConfig: params.layoutConfig }
         : {}),
       ...(params.emailConfig !== undefined
-        ? { emailConfig: params.emailConfig }
+        ? {
+            emailConfig: {
+              ...params.emailConfig,
+              extraAttachments:
+                params.emailConfig.extraAttachments ??
+                currentMeta.emailConfig?.extraAttachments ??
+                [],
+            },
+          }
         : {}),
       ...(params.selectionConfig !== undefined
         ? { selectionConfig: params.selectionConfig }
@@ -1391,9 +1400,34 @@ function parseEmailConfig(
   raw: Record<string, unknown> | CertificateEmailConfig | null | undefined,
 ): CertificateEmailConfig {
   if (!raw || typeof raw !== "object") {
-    return { ...DEFAULT_CERTIFICATE_EMAIL_CONFIG };
+    return { ...DEFAULT_CERTIFICATE_EMAIL_CONFIG, extraAttachments: [] };
   }
   const obj = raw as Record<string, unknown>;
+  const extraAttachments: CertificateEmailExtraAttachment[] = Array.isArray(
+    obj.extraAttachments,
+  )
+    ? obj.extraAttachments
+        .filter(
+          (item): item is Record<string, unknown> =>
+            Boolean(item) && typeof item === "object",
+        )
+        .map((item) => ({
+          id: typeof item.id === "string" ? item.id.trim() : "",
+          key: typeof item.key === "string" ? item.key.trim() : "",
+          filename:
+            typeof item.filename === "string" ? item.filename.trim() : "",
+          contentType:
+            typeof item.contentType === "string" && item.contentType.trim()
+              ? item.contentType.trim()
+              : "application/octet-stream",
+          sizeBytes:
+            typeof item.sizeBytes === "number" && item.sizeBytes > 0
+              ? Math.round(item.sizeBytes)
+              : 0,
+        }))
+        .filter((item) => Boolean(item.id && item.key && item.filename))
+    : [];
+
   return {
     subject:
       typeof obj.subject === "string" && obj.subject.trim()
@@ -1412,6 +1446,7 @@ function parseEmailConfig(
       typeof obj.delaySeconds === "number" && obj.delaySeconds >= 1
         ? obj.delaySeconds
         : DEFAULT_CERTIFICATE_EMAIL_CONFIG.delaySeconds,
+    extraAttachments,
   };
 }
 

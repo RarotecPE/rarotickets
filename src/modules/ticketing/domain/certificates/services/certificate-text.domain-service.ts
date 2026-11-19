@@ -39,11 +39,24 @@ export type CertificateLayoutConfig = {
   qrCode: CertificateQrCodeConfig;
 };
 
+export type CertificateEmailExtraAttachment = {
+  id: string;
+  key: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+};
+
+export const MAX_CERTIFICATE_EXTRA_ATTACHMENTS = 10;
+export const MAX_CERTIFICATE_EXTRA_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
+export const MAX_CERTIFICATE_EXTRA_ATTACHMENTS_TOTAL_BYTES = 20 * 1024 * 1024;
+
 export type CertificateEmailConfig = {
   subject: string;
   body: string;
   attachmentNamePattern: string;
   delaySeconds: number;
+  extraAttachments?: CertificateEmailExtraAttachment[];
 };
 
 export type CertificateParticipantOverride = {
@@ -159,6 +172,7 @@ Atenciosamente,
 {{responsavel}}`,
   attachmentNamePattern: "Certificado - {{nome}}.pdf",
   delaySeconds: 2,
+  extraAttachments: [],
 };
 
 export const DEFAULT_CERTIFICATE_SELECTION_CONFIG: CertificateSelectionConfig = {

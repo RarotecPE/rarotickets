@@ -66,9 +66,6 @@ export class UpdateEventUseCase extends UseCase<UpdateEventInputDto, UpdateEvent
       canViewAll: input.canViewAll,
     });
     if (!current) return Result.fail(new Error("Evento não encontrado ou sem acesso."));
-    if (current.props.status === "finalizado") {
-      return Result.fail(new Error("Eventos finalizados não podem ser editados."));
-    }
     if (input.props.maxCapacity < current.capacity.confirmed) {
       return Result.fail(
         new Error(
@@ -178,7 +175,12 @@ export class UpdateEventUseCase extends UseCase<UpdateEventInputDto, UpdateEvent
       ip: input.ip,
     });
 
-    if (this.promoteWaitlist && updated.capacity.waitlisted > 0) {
+    if (
+      this.promoteWaitlist &&
+      updated.props.status !== "finalizado" &&
+      updated.props.status !== "cancelado" &&
+      updated.capacity.waitlisted > 0
+    ) {
       try {
         const promotion = await this.promoteWaitlist.execute({
           eventId: input.eventId,
