@@ -1,59 +1,91 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { CheckCircle2, Search, ShieldCheck, XCircle } from "lucide-react";
 import {
   Badge,
   Button,
-  Empty,
   InlineAlert,
   Panel,
   PanelHeader,
   Spinner,
+  inputCls,
 } from "@/components/ui";
+import { ApiError } from "@/client/services/api-service.base";
 import { ticketingApi } from "@/client/services/ticketing-api.service";
 import type { CertificateReadModel } from "@/modules/ticketing/domain/repositories/certificate-repository.interface";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 
-export type CertificateVerificationProps = { code: string };
+export type CertificateVerificationProps = { code?: string };
+
+function normalizeCodeInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  const match = trimmed.match(/\/certificados\/([^/?#]+)/i);
+  if (match?.[1]) {
+    try {
+      return decodeURIComponent(match[1]).trim().toUpperCase();
+    } catch {
+      return match[1].trim().toUpperCase();
+    }
+  }
+  return trimmed.toUpperCase();
+}
 
 export function CertificateVerification({
-  code,
+  code = "",
 }: CertificateVerificationProps) {
+  const initialNormalized = normalizeCodeInput(code);
+  const [inputCode, setInputCode] = useState(initialNormalized);
+  const [queriedCode, setQueriedCode] = useState(initialNormalized);
   const [certificate, setCertificate] = useState<CertificateReadModel | null>(
     null,
   );
-  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loading, setLoading] = useState(Boolean(initialNormalized));
   const [error, setError] = useState<string | null>(null);
-  const [reloadVersion, setReloadVersion] = useState(0);
 
-  useEffect(() => {
-    let active = true;
-    async function verify(): Promise<void> {
-      try {
-        const result = await ticketingApi.getCertificate({ code });
-        if (active) setCertificate(result);
-      } catch (caught) {
-        if (active)
-          setError(
-            caught instanceof Error
-              ? caught.message
-              : "Não foi possível validar este certificado.",
-          );
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void verify();
-    return () => {
-      active = false;
-    };
-  }, [code, reloadVersion]);
+  const runVerification = useCallback(async (targetCode: string) => {
+    const normalized = normalizeCodeInput(targetCode);
+    if (!normalized) return;
 
-  function retry(): void {
+    setQueriedCode(normalized);
     setLoading(true);
     setError(null);
-    setReloadVersion((current) => current + 1);
+    setNotFound(false);
+    setCertificate(null);
+
+    try {
+      const result = await ticketingApi.getCertificate({ code: normalized });
+      setCertificate(result);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 404) {
+        setNotFound(true);
+      } else {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Não foi possível validar este certificado.",
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (initialNormalized) {
+      void runVerification(initialNormalized);
+    }
+  }, [initialNormalized, runVerification]);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    const normalized = normalizeCodeInput(inputCode);
+    if (!normalized) return;
+    setInputCode(normalized);
+    void runVerification(normalized);
   }
 
   return (
@@ -66,9 +98,43 @@ export function CertificateVerification({
           Validação de certificado
         </h1>
         <p className="mt-2 text-sm text-app-muted-foreground">
-          Consulte o código para confirmar a emissão pelo RaroTickets.
+          Insira o código de autenticação para verificar se o certificado é válido.
         </p>
       </div>
+
+      <Panel>
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-5"
+        >
+          <div className="relative flex-1">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-app-muted-foreground"
+              aria-hidden="true"
+            />
+            <input
+              type="text"
+              value={inputCode}
+              onChange={(e) => setInputCode(e.target.value)}
+              placeholder="Digite o código (ex: CERT-2026-ABCD1234)"
+              aria-label="Código de autenticação do certificado"
+              autoComplete="off"
+              spellCheck={false}
+              className={cn(inputCls, "pl-9 font-mono text-sm uppercase")}
+            />
+          </div>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={loading || !inputCode.trim()}
+            className="sm:shrink-0"
+          >
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+            {loading ? "Validando…" : "Validar"}
+          </Button>
+        </form>
+      </Panel>
+
       {loading ? (
         <Panel>
           <div className="p-5">
@@ -83,7 +149,11 @@ export function CertificateVerification({
               className="flex flex-wrap items-center justify-between gap-3"
             >
               {error}
-              <Button compact variant="secondary" onClick={retry}>
+              <Button
+                compact
+                variant="secondary"
+                onClick={() => void runVerification(queriedCode)}
+              >
                 Tentar novamente
               </Button>
             </InlineAlert>
@@ -94,7 +164,12 @@ export function CertificateVerification({
           <PanelHeader
             title="Certificado autêntico"
             description="Os dados abaixo correspondem ao registro localizado no sistema."
-            right={<Badge tone="success">Válido</Badge>}
+            right={
+              <Badge tone="success">
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                Válido
+              </Badge>
+            }
           />
           <div className="space-y-5 p-5 sm:p-8">
             <div className="border-b border-app-border pb-5 text-center">
@@ -155,22 +230,35 @@ export function CertificateVerification({
             </div>
           </div>
         </Panel>
-      ) : (
+      ) : notFound ? (
         <Panel>
-          <div className="p-5">
-            <Empty
-              title="Certificado não localizado"
-              description="Confira o código informado e tente novamente."
-            />
+          <PanelHeader
+            title="Certificado não localizado"
+            right={
+              <Badge tone="danger">
+                <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                Inválido
+              </Badge>
+            }
+          />
+          <div className="p-5 text-sm text-app-muted-foreground">
+            Não encontramos nenhum certificado emitido com o código{" "}
+            <span className="font-mono font-semibold text-app-foreground">
+              {queriedCode}
+            </span>
+            . Verifique se o código foi digitado corretamente.
           </div>
         </Panel>
-      )}
-      <p className="text-center text-xs text-app-muted-foreground">
-        Código consultado:{" "}
-        <span className="font-mono font-semibold text-app-foreground">
-          {code}
-        </span>
-      </p>
+      ) : null}
+
+      {queriedCode ? (
+        <p className="text-center text-xs text-app-muted-foreground">
+          Código consultado:{" "}
+          <span className="font-mono font-semibold text-app-foreground">
+            {queriedCode}
+          </span>
+        </p>
+      ) : null}
     </div>
   );
 }

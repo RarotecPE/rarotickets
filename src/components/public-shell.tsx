@@ -29,6 +29,9 @@ export function PublicShell({ children }: PublicShellProps) {
               <Link href="/eventos" className="hover:text-app-foreground">
                 Eventos
               </Link>
+              <Link href="/certificados" className="hover:text-app-foreground">
+                Certificados
+              </Link>
               <Link href="/login" className="hover:text-app-foreground">
                 Acesso da equipe
               </Link>
@@ -83,6 +86,12 @@ function PublicHeader() {
             className="hidden h-9 items-center rounded-app-md px-3 text-sm font-semibold text-app-muted-foreground hover:bg-app-surface-elevated hover:text-app-foreground sm:inline-flex"
           >
             Explorar eventos
+          </Link>
+          <Link
+            href="/certificados"
+            className="hidden h-9 items-center rounded-app-md px-3 text-sm font-semibold text-app-muted-foreground hover:bg-app-surface-elevated hover:text-app-foreground md:inline-flex"
+          >
+            Certificados
           </Link>
 
           {!isLoading && (
