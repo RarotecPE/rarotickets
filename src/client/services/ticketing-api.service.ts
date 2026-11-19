@@ -601,6 +601,31 @@ export class TicketingApiService extends ApiService {
     ).data;
   }
 
+  async listCertificateRaroNexusUsers(): Promise<
+    Array<{
+      id: string;
+      nome: string;
+      email: string;
+      cpf: string | null;
+      avatar_url: string | null;
+    }>
+  > {
+    return (
+      await this.httpClient.request<{
+        users: Array<{
+          id: string;
+          nome: string;
+          email: string;
+          cpf: string | null;
+          avatar_url: string | null;
+        }>;
+      }>({
+        path: "/api/v1/admin/certificates/raronexus-users",
+        method: "GET",
+      })
+    ).data.users;
+  }
+
   async updateEventCertificateStatus(params: {
     eventId: string;
     workflowStatus: CertificateWorkflowStatus;

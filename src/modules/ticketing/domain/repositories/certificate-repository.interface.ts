@@ -73,7 +73,7 @@ export type CertificateHubReadModel = {
 
 export type CertificateWorkspaceRecipientReadModel = {
   recipientKey: string;
-  source: "checkin" | "confirmado" | "extra";
+  source: "checkin" | "confirmado" | "extra" | "raronexus";
   registrationId: string | null;
   participantId: string | null;
   registrationCode: string | null;

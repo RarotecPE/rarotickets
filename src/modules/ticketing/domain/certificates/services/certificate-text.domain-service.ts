@@ -71,6 +71,7 @@ export type CertificateParticipantOverride = {
 
 export type CertificateExtraRecipient = {
   id: string;
+  source?: "extra" | "raronexus";
   selected: boolean;
   name: string;
   email: string;

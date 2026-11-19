@@ -802,9 +802,14 @@ export class DrizzleCertificateRepository extends CertificateRepository {
     }
 
     for (const extra of selectionConfig.extraRecipients) {
-      const recipientKey = extra.id.startsWith("extra:")
-        ? extra.id
-        : `extra:${extra.id}`;
+      const recipientSource: "extra" | "raronexus" =
+        extra.source === "raronexus" || extra.id.startsWith("raronexus:")
+          ? "raronexus"
+          : "extra";
+      const recipientKey =
+        extra.id.startsWith("extra:") || extra.id.startsWith("raronexus:")
+          ? extra.id
+          : `${recipientSource}:${extra.id}`;
       const existingExtraCert = extraCertByKey.get(recipientKey);
       const emailRecord = emailStatusByKey.get(recipientKey);
       for (const k of Object.keys(extra.customVars || {})) {
@@ -813,10 +818,12 @@ export class DrizzleCertificateRepository extends CertificateRepository {
 
       recipients.push({
         recipientKey,
-        source: "extra",
+        source: recipientSource,
         registrationId: null,
         participantId: null,
-        registrationCode: extra.roleLabel || "EXTRA",
+        registrationCode:
+          extra.roleLabel ||
+          (recipientSource === "raronexus" ? "RARONEXUS" : "EXTRA"),
         selected: extra.selected,
         name: extra.name || existingExtraCert?.participantName || "",
         originalName: extra.name || "",

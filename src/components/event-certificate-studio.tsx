@@ -95,6 +95,14 @@ import { cn, formatDate } from "@/lib/utils";
 
 type StudioStep = "participants" | "studio" | "generator" | "messenger";
 
+type RaroNexusDirectoryUserOption = {
+  id: string;
+  nome: string;
+  email: string;
+  cpf: string | null;
+  avatar_url: string | null;
+};
+
 type GeneratedBatchItem = {
   recipientKey: string;
   participantName: string;
@@ -193,6 +201,16 @@ export function EventCertificateStudio({
   const [participantFilter, setParticipantFilter] = useState<
     "all" | "selected" | "checkin" | "missing-email"
   >("all");
+  const [nexusModalOpen, setNexusModalOpen] = useState(false);
+  const [nexusUsers, setNexusUsers] = useState<RaroNexusDirectoryUserOption[]>(
+    [],
+  );
+  const [loadingNexusUsers, setLoadingNexusUsers] = useState(false);
+  const [nexusUsersError, setNexusUsersError] = useState<string | null>(null);
+  const [nexusSearch, setNexusSearch] = useState("");
+  const [selectedNexusUserIds, setSelectedNexusUserIds] = useState<string[]>(
+    [],
+  );
 
   // Step 2 Studio state
   const [pdfSize, setPdfSize] = useState<{ width: number; height: number }>({
@@ -510,16 +528,19 @@ export function EventCertificateStudio({
     const extraRecipients: CertificateExtraRecipient[] = [];
 
     for (const r of nextRecipients) {
-      if (r.source === "extra") {
+      if (r.source === "extra" || r.source === "raronexus") {
         extraRecipients.push({
           id: r.recipientKey,
+          source: r.source,
           selected: r.selected,
           name: r.name,
           email: r.email,
           cpf: r.cpf,
           company: r.company,
           jobTitle: r.jobTitle,
-          roleLabel: r.registrationCode || "EXTRA",
+          roleLabel:
+            r.registrationCode ||
+            (r.source === "raronexus" ? "RARONEXUS" : "EXTRA"),
           customVars: r.customVars,
         });
       } else {
@@ -547,6 +568,7 @@ export function EventCertificateStudio({
     workflowStatus?: CertificateWorkflowStatus;
     resetEmailStatuses?: boolean;
     silent?: boolean;
+    recipientsOverride?: CertificateWorkspaceRecipientReadModel[];
   }): Promise<CertificateEventWorkspaceReadModel | null> {
     if (!layoutConfig || !emailConfig) return null;
     setSavingWorkspace(true);
@@ -554,7 +576,9 @@ export function EventCertificateStudio({
     if (!options?.silent) setNotice(null);
 
     try {
-      const nextSelection = buildCurrentSelectionConfig(recipients);
+      const nextSelection = buildCurrentSelectionConfig(
+        options?.recipientsOverride ?? recipientsRef.current,
+      );
       const updated = await ticketingApi.saveEventCertificateWorkspace({
         eventId,
         workloadHours,
@@ -681,6 +705,87 @@ export function EventCertificateStudio({
     const next = recipients.filter((r) => r.recipientKey !== recipientKey);
     setRecipients(next);
     setSelectionConfig(buildCurrentSelectionConfig(next));
+  }
+
+  async function handleOpenNexusModal(forceReload = false): Promise<void> {
+    setNexusModalOpen(true);
+    setNexusSearch("");
+    setSelectedNexusUserIds([]);
+    setNexusUsersError(null);
+
+    if (!forceReload && nexusUsers.length > 0) return;
+
+    setLoadingNexusUsers(true);
+    try {
+      const users = await ticketingApi.listCertificateRaroNexusUsers();
+      setNexusUsers(users);
+    } catch (caught) {
+      setNexusUsersError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível carregar os usuários do RaroNexus.",
+      );
+    } finally {
+      setLoadingNexusUsers(false);
+    }
+  }
+
+  function isNexusUserAlreadyAdded(user: RaroNexusDirectoryUserOption): boolean {
+    const targetKey = `raronexus:${user.id}`;
+    const targetEmail = user.email.trim().toLowerCase();
+    return recipients.some(
+      (r) =>
+        r.recipientKey === targetKey ||
+        (Boolean(r.email) && r.email.trim().toLowerCase() === targetEmail),
+    );
+  }
+
+  function handleToggleNexusUserSelection(userId: string): void {
+    setSelectedNexusUserIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId],
+    );
+  }
+
+  function handleConfirmAddNexusUsers(): void {
+    if (selectedNexusUserIds.length === 0) return;
+    const selectedSet = new Set(selectedNexusUserIds);
+    const toAdd: CertificateWorkspaceRecipientReadModel[] = nexusUsers
+      .filter((u) => selectedSet.has(u.id) && !isNexusUserAlreadyAdded(u))
+      .map((u) => ({
+        recipientKey: `raronexus:${u.id}`,
+        source: "raronexus",
+        registrationId: null,
+        participantId: null,
+        registrationCode: "RARONEXUS",
+        selected: true,
+        name: u.nome,
+        originalName: u.nome,
+        email: u.email,
+        cpf: u.cpf || "",
+        company: "",
+        jobTitle: "",
+        hasCheckIn: false,
+        checkInAt: null,
+        customVars: {},
+        certificateId: null,
+        authenticationCode: null,
+        issuedAt: null,
+        emailStatus: "idle",
+        emailSentAt: null,
+        emailError: null,
+      }));
+
+    if (toAdd.length > 0) {
+      const next = [...toAdd, ...recipients];
+      setRecipients(next);
+      setSelectionConfig(buildCurrentSelectionConfig(next));
+      void handleSaveWorkspace({ silent: true, recipientsOverride: next });
+    }
+
+    setNexusModalOpen(false);
+    setSelectedNexusUserIds([]);
   }
 
   // Step 2 Studio field helpers
@@ -1090,6 +1195,7 @@ export function EventCertificateStudio({
 
   async function sendSingleRecipientEmail(
     recipient: CertificateWorkspaceRecipientReadModel,
+    options?: { skipSave?: boolean },
   ): Promise<boolean> {
     if (!recipient.email || !recipient.email.includes("@")) {
       setRecipients((prev) =>
@@ -1107,6 +1213,9 @@ export function EventCertificateStudio({
     }
 
     setSendingRecipientKey(recipient.recipientKey);
+    if (!options?.skipSave) {
+      await handleSaveWorkspace({ issueBatch: true, silent: true });
+    }
     setRecipients((prev) =>
       prev.map((item) =>
         item.recipientKey === recipient.recipientKey
@@ -1179,7 +1288,7 @@ export function EventCertificateStudio({
     for (let i = 0; i < queue.length; i++) {
       if (stopQueueRef.current) break;
       const target = queue[i];
-      await sendSingleRecipientEmail(target);
+      await sendSingleRecipientEmail(target, { skipSave: true });
 
       if (i < queue.length - 1 && !stopQueueRef.current) {
         const waitMs = Math.max(500, (emailConfig.delaySeconds || 2) * 1000);
@@ -1224,7 +1333,7 @@ export function EventCertificateStudio({
       .map((r) => [
         `"${(r.name || "").replace(/"/g, '""')}"`,
         `"${(r.email || "").replace(/"/g, '""')}"`,
-        r.source,
+        r.source === "raronexus" ? "RaroNexus" : r.source,
         r.authenticationCode || "",
         r.emailStatus || "idle",
         r.emailSentAt
@@ -1551,15 +1660,26 @@ export function EventCertificateStudio({
             <PanelHeader
               title="Destinatários"
               right={
-                <Button
-                  type="button"
-                  compact
-                  variant="secondary"
-                  onClick={handleAddExtraRecipient}
-                >
-                  <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
-                  Adicionar Participante Extra
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    compact
+                    variant="secondary"
+                    onClick={() => void handleOpenNexusModal()}
+                  >
+                    <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                    Adicionar Usuário RaroNexus
+                  </Button>
+                  <Button
+                    type="button"
+                    compact
+                    variant="secondary"
+                    onClick={handleAddExtraRecipient}
+                  >
+                    <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                    Adicionar Participante Extra
+                  </Button>
+                </div>
               }
             />
 
@@ -1738,6 +1858,13 @@ export function EventCertificateStudio({
                               <Badge tone="success">Check-in validado</Badge>
                             ) : r.source === "confirmado" ? (
                               <Badge tone="warning">Sem check-in</Badge>
+                            ) : r.source === "raronexus" ? (
+                              <Badge
+                                tone="primary"
+                                className="bg-cyan-500/15 text-cyan-600 dark:text-cyan-400"
+                              >
+                                RaroNexus
+                              </Badge>
                             ) : (
                               <Badge tone="primary">Extra</Badge>
                             )}
@@ -1746,14 +1873,15 @@ export function EventCertificateStudio({
                             {r.authenticationCode || "—"}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {r.source === "extra" ? (
+                            {r.source === "extra" ||
+                            r.source === "raronexus" ? (
                               <button
                                 type="button"
                                 onClick={() =>
                                   handleDeleteExtraRecipient(r.recipientKey)
                                 }
                                 className="rounded p-1 text-app-muted-foreground hover:bg-app-danger/10 hover:text-app-danger cursor-pointer"
-                                title="Remover participante extra"
+                                title="Remover destinatário"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -3251,6 +3379,205 @@ export function EventCertificateStudio({
           </Panel>
         </div>
       )}
+
+      {/* Modal de Seleção de Usuários RaroNexus */}
+      {nexusModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+          onClick={() => setNexusModalOpen(false)}
+        >
+          <div
+            className="flex w-full max-w-lg flex-col overflow-hidden rounded-app-lg border border-app-border bg-app-surface shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-app-border px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-app-primary" aria-hidden="true" />
+                <h4 className="text-sm font-bold text-app-foreground">
+                  Adicionar Usuários RaroNexus
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNexusModalOpen(false)}
+                className="rounded-app-md p-1.5 text-app-muted-foreground hover:bg-app-surface-elevated hover:text-app-foreground cursor-pointer"
+                aria-label="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-4">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search
+                    className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-app-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="search"
+                    value={nexusSearch}
+                    onChange={(e) => setNexusSearch(e.target.value)}
+                    placeholder="Buscar por nome ou e-mail…"
+                    className={cn(inputCls, "h-9 pl-9 text-xs")}
+                    autoFocus
+                  />
+                </div>
+                <Button
+                  type="button"
+                  compact
+                  variant="ghost"
+                  disabled={loadingNexusUsers}
+                  onClick={() => void handleOpenNexusModal(true)}
+                  title="Recarregar usuários"
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      loadingNexusUsers && "animate-spin",
+                    )}
+                  />
+                </Button>
+              </div>
+
+              {loadingNexusUsers ? (
+                <div className="py-10">
+                  <Spinner label="Carregando usuários do RaroNexus…" />
+                </div>
+              ) : nexusUsersError ? (
+                <InlineAlert tone="danger">{nexusUsersError}</InlineAlert>
+              ) : (
+                (() => {
+                  const q = nexusSearch.trim().toLowerCase();
+                  const visibleUsers = nexusUsers.filter(
+                    (u) =>
+                      !q ||
+                      u.nome.toLowerCase().includes(q) ||
+                      u.email.toLowerCase().includes(q),
+                  );
+                  const selectableVisible = visibleUsers.filter(
+                    (u) => !isNexusUserAlreadyAdded(u),
+                  );
+                  const allVisibleSelected =
+                    selectableVisible.length > 0 &&
+                    selectableVisible.every((u) =>
+                      selectedNexusUserIds.includes(u.id),
+                    );
+
+                  return (
+                    <>
+                      {selectableVisible.length > 0 ? (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-app-muted-foreground">
+                            {visibleUsers.length} usuário(s)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const visibleIds = selectableVisible.map(
+                                (u) => u.id,
+                              );
+                              if (allVisibleSelected) {
+                                const removeSet = new Set(visibleIds);
+                                setSelectedNexusUserIds((prev) =>
+                                  prev.filter((id) => !removeSet.has(id)),
+                                );
+                              } else {
+                                setSelectedNexusUserIds((prev) =>
+                                  Array.from(new Set([...prev, ...visibleIds])),
+                                );
+                              }
+                            }}
+                            className="font-semibold text-app-primary hover:underline cursor-pointer"
+                          >
+                            {allVisibleSelected
+                              ? "Desmarcar visíveis"
+                              : "Selecionar todos"}
+                          </button>
+                        </div>
+                      ) : null}
+
+                      <div className="max-h-[48vh] overflow-y-auto rounded-app-md border border-app-border divide-y divide-app-border">
+                        {visibleUsers.length === 0 ? (
+                          <div className="px-4 py-8 text-center text-xs text-app-muted-foreground">
+                            Nenhum usuário encontrado.
+                          </div>
+                        ) : (
+                          visibleUsers.map((user) => {
+                            const alreadyAdded = isNexusUserAlreadyAdded(user);
+                            const isChecked =
+                              alreadyAdded ||
+                              selectedNexusUserIds.includes(user.id);
+                            return (
+                              <label
+                                key={user.id}
+                                className={cn(
+                                  "flex items-center justify-between gap-3 px-3 py-2.5 text-sm transition-colors",
+                                  alreadyAdded
+                                    ? "bg-app-surface-elevated/40 opacity-65 cursor-default"
+                                    : "hover:bg-app-surface-elevated/50 cursor-pointer",
+                                )}
+                              >
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    disabled={alreadyAdded}
+                                    onChange={() =>
+                                      handleToggleNexusUserSelection(user.id)
+                                    }
+                                    className="h-4 w-4 shrink-0 accent-app-primary"
+                                  />
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-semibold text-app-foreground">
+                                      {user.nome}
+                                    </p>
+                                    <p className="truncate font-mono text-[11px] text-app-muted-foreground">
+                                      {user.email}
+                                    </p>
+                                  </div>
+                                </div>
+                                {alreadyAdded ? (
+                                  <Badge tone="muted" className="shrink-0">
+                                    Já adicionado
+                                  </Badge>
+                                ) : null}
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </>
+                  );
+                })()
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-app-border bg-app-surface-elevated/30 px-4 py-3">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-9 px-3 text-xs"
+                onClick={() => setNexusModalOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                className="h-9 px-3.5 text-xs"
+                disabled={selectedNexusUserIds.length === 0}
+                onClick={handleConfirmAddNexusUsers}
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                {selectedNexusUserIds.length > 0
+                  ? `Adicionar (${selectedNexusUserIds.length})`
+                  : "Adicionar"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Modal de Visualização de PDF Individual */}
       {previewModalItem ? (

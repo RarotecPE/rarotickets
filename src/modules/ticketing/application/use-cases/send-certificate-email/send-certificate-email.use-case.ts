@@ -93,6 +93,12 @@ export class SendCertificateEmailUseCase extends UseCase<
       ? workspace.recipients.find((r) => r.selected) ?? workspace.recipients[0]
       : workspace.recipients.find((r) => r.recipientKey === input.recipientKey);
 
+    if (!isTest && !targetRecipient) {
+      return Result.fail(
+        new Error("Destinatário não encontrado no workspace. Salve as alterações e tente novamente."),
+      );
+    }
+
     const participantName =
       targetRecipient?.name || "Participante de Demonstração";
     const toEmail = isTest

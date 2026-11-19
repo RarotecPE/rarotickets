@@ -14,6 +14,13 @@ export type AuthorizationCodeExchangeParams = { code: string; redirectUri: strin
 export type SessionTokenParams = { token: string };
 export type AccessCheckParams = { token: string; permission: Permission };
 export type ExchangeResponse = { token: string; user: RaroNexusUser; role: RaroNexusProfile };
+export type RaroNexusDirectoryUser = {
+  id: string;
+  nome: string;
+  email: string;
+  cpf: string | null;
+  avatar_url: string | null;
+};
 
 type NexusEnvelope<T> = { success: boolean; data?: T; message?: string };
 type TokenResponseData = { global_session_token?: unknown; user?: unknown; role?: unknown };
@@ -117,6 +124,47 @@ export class RaroNexusClient {
       throw new AuthFailure({ kind: "forbidden", code: "PERMISSION_DENIED", message: "Você não tem permissão para realizar esta ação.", httpStatus: 403 });
     }
     return session;
+  }
+
+  async listDirectoryUsers(): Promise<RaroNexusDirectoryUser[]> {
+    this.ensureConfigured();
+    const environment = readEnvironment();
+    const baseUrl = (environment.raroNexusApiUrl || environment.raroNexusBaseUrl).replace(/\/$/, "");
+    const response = await fetch(`${baseUrl}/api/v1/applications/authorized-users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        client_id: environment.raroNexusClientId,
+        client_secret: environment.raroNexusClientSecret,
+        scope: "all",
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    const envelope = await readEnvelope<unknown[]>(response);
+    if (!response.ok || !envelope?.success || !Array.isArray(envelope.data)) {
+      throw new Error(
+        envelope?.message || "Não foi possível carregar os usuários do RaroNexus.",
+      );
+    }
+
+    const users: RaroNexusDirectoryUser[] = [];
+    for (const item of envelope.data) {
+      if (!isRecord(item)) continue;
+      const id = readText(item.id);
+      const email = readText(item.email).toLowerCase();
+      const nome = readText(item.nome) || email;
+      if (!id || !email) continue;
+      users.push({
+        id,
+        nome,
+        email,
+        cpf: readText(item.cpf) || null,
+        avatar_url: readText(item.avatar_url) || null,
+      });
+    }
+
+    return users.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }
 
   private ensureConfigured(): void {
