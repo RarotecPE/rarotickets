@@ -53,7 +53,8 @@ export type SendPixPendingNotificationEmailParams = {
 export type CertificateEmailExtraAttachmentPayload = {
   filename: string;
   contentType: string;
-  contentBase64: string;
+  contentBase64?: string;
+  contentUrl?: string;
 };
 
 export type SendCertificateEmailParams = {

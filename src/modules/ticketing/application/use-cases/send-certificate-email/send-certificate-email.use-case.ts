@@ -194,9 +194,23 @@ export class SendCertificateEmailUseCase extends UseCase<
     const extraAttachments: Array<{
       filename: string;
       contentType: string;
-      contentBase64: string;
+      contentBase64?: string;
+      contentUrl?: string;
     }> = [];
     for (const extra of workspace.emailConfig.extraAttachments ?? []) {
+      const signedUrl = await this.fileStorageProvider.getTemporaryReadUrl?.({
+        key: extra.key,
+        expiresInSeconds: 600,
+      });
+      if (signedUrl) {
+        extraAttachments.push({
+          filename: extra.filename,
+          contentType: extra.contentType || "application/octet-stream",
+          contentUrl: signedUrl,
+        });
+        continue;
+      }
+
       const storedExtra = await this.fileStorageProvider.read({
         key: extra.key,
       });

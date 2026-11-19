@@ -5,6 +5,10 @@ export type StoreFileParams = {
   preferExternalUrl?: boolean;
 };
 export type ReadStoredFileParams = { key: string };
+export type GetTemporaryReadUrlParams = {
+  key: string;
+  expiresInSeconds?: number;
+};
 export type StoredFileContent = { content: Uint8Array; contentType: string };
 
 export interface IFileStorageProvider {
@@ -12,4 +16,7 @@ export interface IFileStorageProvider {
   storePublic(params: StoreFileParams): Promise<string>;
   read(params: ReadStoredFileParams): Promise<StoredFileContent | null>;
   delete(params: ReadStoredFileParams): Promise<void>;
+  getTemporaryReadUrl?(
+    params: GetTemporaryReadUrlParams,
+  ): Promise<string | null>;
 }

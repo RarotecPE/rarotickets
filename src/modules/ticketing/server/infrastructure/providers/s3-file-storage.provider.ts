@@ -8,6 +8,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { FileStorageProvider } from "./file-storage-provider.base";
 import type {
+  GetTemporaryReadUrlParams,
   ReadStoredFileParams,
   StoreFileParams,
   StoredFileContent,
@@ -119,6 +120,21 @@ export class S3FileStorageProvider extends FileStorageProvider {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: fullKey }),
     );
+  }
+
+  async getTemporaryReadUrl(
+    params: GetTemporaryReadUrlParams,
+  ): Promise<string | null> {
+    try {
+      const fullKey = this.buildKey(params.key);
+      return await getSignedUrl(
+        this.client,
+        new GetObjectCommand({ Bucket: this.bucket, Key: fullKey }),
+        { expiresIn: params.expiresInSeconds ?? 600 },
+      );
+    } catch {
+      return null;
+    }
   }
 }
 

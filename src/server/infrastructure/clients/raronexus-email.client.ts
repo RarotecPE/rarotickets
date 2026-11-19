@@ -4,7 +4,8 @@ import { readEnvironment } from "@/server/config/environment.config";
 export interface SendEmailAttachment {
   filename: string;
   contentType: string;
-  contentBase64: string;
+  contentBase64?: string;
+  contentUrl?: string;
 }
 
 export interface SendEmailOptions {
@@ -123,7 +124,9 @@ export class RaroNexusEmailClient {
       attachments: options.attachments?.map((att) => ({
         filename: att.filename,
         content_type: att.contentType,
-        content_base64: att.contentBase64,
+        ...(att.contentUrl
+          ? { content_url: att.contentUrl }
+          : { content_base64: att.contentBase64 ?? "" }),
       })),
       metadata: options.metadata,
     };

@@ -90,7 +90,7 @@ describe("ParticipantEmailProvider", () => {
       "credencial-RT-2026-ABCD12.png",
     );
     expect(capturedOptions!.attachments![0].contentType).toBe("image/png");
-    expect(capturedOptions!.attachments![0].contentBase64.length).toBeGreaterThan(50);
+    expect(capturedOptions!.attachments![0].contentBase64?.length).toBeGreaterThan(50);
     expect(capturedOptions!.metadata).toMatchObject({
       registrationCode: "RT-2026-ABCD12",
       participantName: "João da Silva",
