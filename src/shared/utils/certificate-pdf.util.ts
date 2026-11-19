@@ -5,7 +5,10 @@ import type {
   CertificateLayoutConfig,
   CertificateRecipientVariables,
 } from "@/modules/ticketing/domain/certificates/services/certificate-text.domain-service";
-import { interpolateCertificateTemplate } from "@/modules/ticketing/domain/certificates/services/certificate-text.domain-service";
+import {
+  applyCertificateTextTransform,
+  interpolateCertificateTemplate,
+} from "@/modules/ticketing/domain/certificates/services/certificate-text.domain-service";
 
 const FONT_MAP: Record<CertificateFontFamily, StandardFonts> = {
   "Courier-Bold": StandardFonts.CourierBold,
@@ -238,9 +241,13 @@ export async function renderCertificatePdf(
   const originY = cropBox?.y || 0;
 
   for (const field of params.layoutConfig.fields) {
-    const rawResolved = interpolateCertificateTemplate({
+    const rawInterpolated = interpolateCertificateTemplate({
       template: field.template,
       variables: params.variables,
+    });
+    const rawResolved = applyCertificateTextTransform({
+      value: rawInterpolated,
+      transform: field.textTransform,
     });
     const resolvedText = normalizeWinAnsiText(rawResolved);
     if (!resolvedText.trim()) continue;

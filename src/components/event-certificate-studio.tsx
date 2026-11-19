@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { ticketingApi } from "@/client/services/ticketing-api.service";
 import {
+  applyCertificateTextTransform,
   interpolateCertificateTemplate,
   sanitizeCertificateFilename,
 } from "@/modules/ticketing/domain/certificates/services/certificate-text.domain-service";
@@ -67,6 +68,7 @@ import type {
   CertificateSelectionConfig,
   CertificateTextAlign,
   CertificateTextFieldConfig,
+  CertificateTextTransform,
   CertificateWorkflowStatus,
 } from "@/modules/ticketing/domain/certificates/services/certificate-text.domain-service";
 import type {
@@ -232,6 +234,10 @@ export function EventCertificateStudio({
 
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const pdfCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const activePdfRenderTaskRef = useRef<{
+    cancel: () => void;
+    promise: Promise<unknown>;
+  } | null>(null);
 
   // Step 3 Generator state
   const [generatedBatch, setGeneratedBatch] = useState<GeneratedBatchItem[]>(
@@ -402,6 +408,7 @@ export function EventCertificateStudio({
     }
 
     let cancelled = false;
+    let activeLoadingTask: { destroy: () => Promise<void> } | null = null;
 
     const renderToCanvas = async () => {
       setIsRenderingPreview(true);
@@ -463,10 +470,18 @@ export function EventCertificateStudio({
         const loadingTask = pdfjsLib.getDocument({
           data: bytesToRender.slice(0),
         });
+        activeLoadingTask = loadingTask;
         const pdfDoc = await loadingTask.promise;
+        if (cancelled) {
+          void pdfDoc.destroy();
+          return;
+        }
         const page = await pdfDoc.getPage(1);
 
-        if (cancelled || !pdfCanvasRef.current) return;
+        if (cancelled || !pdfCanvasRef.current) {
+          void pdfDoc.destroy();
+          return;
+        }
 
         const baseViewport = page.getViewport({ scale: 1 });
         setPdfSize({
@@ -474,21 +489,57 @@ export function EventCertificateStudio({
           height: Math.round(baseViewport.height),
         });
 
+        // Garante que qualquer renderização anterior no mesmo <canvas> seja cancelada e finalizada antes de iniciar outra
+        if (activePdfRenderTaskRef.current) {
+          const previousTask = activePdfRenderTaskRef.current;
+          previousTask.cancel();
+          await previousTask.promise.catch(() => undefined);
+          if (activePdfRenderTaskRef.current === previousTask) {
+            activePdfRenderTaskRef.current = null;
+          }
+        }
+
+        if (cancelled || !pdfCanvasRef.current) {
+          void pdfDoc.destroy();
+          return;
+        }
+
         const renderScale = 2;
         const viewport = page.getViewport({ scale: renderScale });
         const canvas = pdfCanvasRef.current;
         const ctx = canvas.getContext("2d");
-        if (!ctx) return;
+        if (!ctx) {
+          void pdfDoc.destroy();
+          return;
+        }
 
         canvas.width = viewport.width;
         canvas.height = viewport.height;
 
-        await page.render({
+        const renderTask = page.render({
           canvasContext: ctx,
           viewport,
-        }).promise;
+        });
+        activePdfRenderTaskRef.current = renderTask;
+
+        try {
+          await renderTask.promise;
+        } finally {
+          if (activePdfRenderTaskRef.current === renderTask) {
+            activePdfRenderTaskRef.current = null;
+          }
+          void pdfDoc.destroy();
+        }
       } catch (err) {
-        console.error("Erro ao renderizar PDF no canvas do estúdio:", err);
+        const isCancelledError =
+          cancelled ||
+          (typeof err === "object" &&
+            err !== null &&
+            "name" in err &&
+            (err as { name?: string }).name === "RenderingCancelledException");
+        if (!isCancelledError) {
+          console.error("Erro ao renderizar PDF no canvas do estúdio:", err);
+        }
       } finally {
         if (!cancelled) setIsRenderingPreview(false);
       }
@@ -498,6 +549,10 @@ export function EventCertificateStudio({
 
     return () => {
       cancelled = true;
+      activePdfRenderTaskRef.current?.cancel();
+      if (activeLoadingTask) {
+        void activeLoadingTask.destroy().catch(() => undefined);
+      }
     };
   }, [
     activeStep,
@@ -817,6 +872,7 @@ export function EventCertificateStudio({
       colorHex: "#334155",
       align: "center",
       maxWidth: defaultWidth,
+      textTransform: "original",
     };
     setLayoutConfig({
       ...layoutConfig,
@@ -2272,6 +2328,63 @@ export function EventCertificateStudio({
                           />
                         </Field>
                       </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-xs font-semibold text-app-foreground">
+                          Capitalização
+                        </label>
+                        <div className="grid grid-cols-3 rounded-app-md border border-app-border bg-app-surface p-1">
+                          {(
+                            [
+                              {
+                                value: "original",
+                                label: "Original",
+                                title:
+                                  "Mantém o texto exatamente como foi cadastrado",
+                              },
+                              {
+                                value: "uppercase",
+                                label: "MAIÚSCULAS",
+                                title:
+                                  "Tudo em letras maiúsculas (ex: RODRIGO SOUZA)",
+                              },
+                              {
+                                value: "title",
+                                label: "Iniciais Maiúsculas",
+                                title:
+                                  "Primeira letra de cada palavra em maiúscula (ex: Rodrigo de Souza)",
+                              },
+                            ] as Array<{
+                              value: CertificateTextTransform;
+                              label: string;
+                              title: string;
+                            }>
+                          ).map((opt) => {
+                            const currentTransform: CertificateTextTransform =
+                              activeField.textTransform ?? "original";
+                            return (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                title={opt.title}
+                                onClick={() =>
+                                  updateTextField(activeField.id, {
+                                    textTransform: opt.value,
+                                  })
+                                }
+                                className={cn(
+                                  "flex items-center justify-center rounded px-1.5 py-1.5 text-[11px] font-semibold transition cursor-pointer",
+                                  currentTransform === opt.value
+                                    ? "bg-app-primary text-white"
+                                    : "text-app-muted-foreground hover:text-app-foreground",
+                                )}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -2550,11 +2663,15 @@ export function EventCertificateStudio({
                         viewBox={`0 0 ${pdfSize.width} ${pdfSize.height}`}
                       >
                         {layoutConfig.fields.map((field) => {
-                          const resolvedPreview =
+                          const rawPreview =
                             interpolateCertificateTemplate({
                               template: field.template,
                               variables: sampleVariables,
                             }) || field.label;
+                          const resolvedPreview = applyCertificateTextTransform({
+                            value: rawPreview,
+                            transform: field.textTransform,
+                          });
 
                           const boxWidthPt =
                             field.maxWidth && field.maxWidth > 40

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CertificateTextDomainService,
+  applyCertificateTextTransform,
   cleanCertificateSpaces,
   interpolateCertificateTemplate,
   sanitizeCertificateFilename,
@@ -68,5 +69,28 @@ describe("CertificateTextDomainService", () => {
         },
       }),
     ).toBe("Olá Pedro ");
+  });
+
+  it("aplica transformação de capitalização (Original, MAIÚSCULAS e Iniciais Maiúsculas)", () => {
+    expect(
+      applyCertificateTextTransform({
+        value: "rodrigo de Souza",
+        transform: "original",
+      }),
+    ).toBe("rodrigo de Souza");
+
+    expect(
+      applyCertificateTextTransform({
+        value: "Rodrigo de Souza e Ávila",
+        transform: "uppercase",
+      }),
+    ).toBe("RODRIGO DE SOUZA E ÁVILA");
+
+    expect(
+      applyCertificateTextTransform({
+        value: "RODRIGO DE SOUZA E ÁVILA",
+        transform: "title",
+      }),
+    ).toBe("Rodrigo de Souza e Ávila");
   });
 });

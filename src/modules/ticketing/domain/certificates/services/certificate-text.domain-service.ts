@@ -12,6 +12,7 @@ export type CertificateFontFamily =
   | "Times-Roman";
 
 export type CertificateTextAlign = "left" | "center" | "right";
+export type CertificateTextTransform = "original" | "uppercase" | "title";
 
 export type CertificateTextFieldConfig = {
   id: string;
@@ -24,6 +25,7 @@ export type CertificateTextFieldConfig = {
   colorHex: string;
   align: CertificateTextAlign;
   maxWidth: number;
+  textTransform?: CertificateTextTransform;
 };
 
 export type CertificateQrCodeConfig = {
@@ -142,6 +144,7 @@ export const DEFAULT_CERTIFICATE_TEXT_FIELDS: CertificateTextFieldConfig[] = [
     colorHex: "#0f172a",
     align: "center",
     maxWidth: 460,
+    textTransform: "original",
   },
 ];
 
@@ -195,13 +198,28 @@ export function toSmartCertificateTitleCase(
   return cleaned
     .split(" ")
     .map((word, index) => {
-      const lower = word.toLowerCase();
+      const lower = word.toLocaleLowerCase("pt-BR");
       if (index > 0 && LOWERCASE_PARTICLES.has(lower)) {
         return lower;
       }
-      return lower.charAt(0).toUpperCase() + lower.slice(1);
+      return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
     })
     .join(" ");
+}
+
+export function applyCertificateTextTransform(params: {
+  value: string;
+  transform?: CertificateTextTransform;
+}): string {
+  const text = params.value || "";
+  if (!text) return "";
+  if (params.transform === "uppercase") {
+    return text.toLocaleUpperCase("pt-BR");
+  }
+  if (params.transform === "title") {
+    return toSmartCertificateTitleCase({ value: text });
+  }
+  return text;
 }
 
 export function sanitizeCertificateFilename(
