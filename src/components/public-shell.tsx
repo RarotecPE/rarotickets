@@ -87,12 +87,6 @@ function PublicHeader() {
           >
             Explorar eventos
           </Link>
-          <Link
-            href="/certificados"
-            className="hidden h-9 items-center rounded-app-md px-3 text-sm font-semibold text-app-muted-foreground hover:bg-app-surface-elevated hover:text-app-foreground md:inline-flex"
-          >
-            Certificados
-          </Link>
 
           {!isLoading && (
             <>
