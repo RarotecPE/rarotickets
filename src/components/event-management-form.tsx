@@ -18,6 +18,7 @@ import { ticketingApi } from "@/client/services/ticketing-api.service";
 import type { CreateEventRequest } from "@/client/services/ticketing-api.service";
 import { useAuth } from "@/components/auth-provider";
 import { CouponAllowedCpfsField } from "@/components/coupon-allowed-cpfs-field";
+import { CouponAllowedEmailsField } from "@/components/coupon-allowed-emails-field";
 import { Dialog } from "@/components/dialog";
 import {
   Button,
@@ -2118,20 +2119,18 @@ function TicketLotsSection({
                               htmlFor={`lot-${index}-coupon-${cIdx}-allowedEmailsText`}
                               error={errors[`lots.${index}.coupons.${cIdx}.allowedEmailsText`]}
                             >
-                              <textarea
+                              <CouponAllowedEmailsField
                                 id={`lot-${index}-coupon-${cIdx}-allowedEmailsText`}
-                                rows={2}
                                 value={coupon.allowedEmailsText}
-                                onChange={(e) =>
+                                couponCode={coupon.code}
+                                onChange={(nextValue) =>
                                   onChangeCoupon({
                                     lotRowId: lot.rowId,
                                     couponRowId: coupon.rowId,
                                     field: "allowedEmailsText",
-                                    value: e.target.value,
+                                    value: nextValue,
                                   })
                                 }
-                                className={textAreaClass}
-                                placeholder="Deixe vazio para qualquer participante, ou informe e-mails separados por vírgula ou linha"
                               />
                             </Field>
 
