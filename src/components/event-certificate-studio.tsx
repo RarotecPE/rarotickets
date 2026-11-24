@@ -2333,7 +2333,7 @@ export function EventCertificateStudio({
                         <label className="mb-1.5 block text-xs font-semibold text-app-foreground">
                           Capitalização
                         </label>
-                        <div className="grid grid-cols-3 rounded-app-md border border-app-border bg-app-surface p-1">
+                        <div className="grid grid-cols-2 gap-1 rounded-app-md border border-app-border bg-app-surface p-1">
                           {(
                             [
                               {
@@ -2347,6 +2347,12 @@ export function EventCertificateStudio({
                                 label: "MAIÚSCULAS",
                                 title:
                                   "Tudo em letras maiúsculas (ex: RODRIGO SOUZA)",
+                              },
+                              {
+                                value: "lowercase",
+                                label: "minúsculas",
+                                title:
+                                  "Tudo em letras minúsculas (ex: rodrigo souza)",
                               },
                               {
                                 value: "title",

@@ -12,7 +12,11 @@ export type CertificateFontFamily =
   | "Times-Roman";
 
 export type CertificateTextAlign = "left" | "center" | "right";
-export type CertificateTextTransform = "original" | "uppercase" | "title";
+export type CertificateTextTransform =
+  | "original"
+  | "uppercase"
+  | "lowercase"
+  | "title";
 
 export type CertificateTextFieldConfig = {
   id: string;
@@ -215,6 +219,9 @@ export function applyCertificateTextTransform(params: {
   if (!text) return "";
   if (params.transform === "uppercase") {
     return text.toLocaleUpperCase("pt-BR");
+  }
+  if (params.transform === "lowercase") {
+    return text.toLocaleLowerCase("pt-BR");
   }
   if (params.transform === "title") {
     return toSmartCertificateTitleCase({ value: text });

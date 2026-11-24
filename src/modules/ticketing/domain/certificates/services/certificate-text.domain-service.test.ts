@@ -71,7 +71,7 @@ describe("CertificateTextDomainService", () => {
     ).toBe("Olá Pedro ");
   });
 
-  it("aplica transformação de capitalização (Original, MAIÚSCULAS e Iniciais Maiúsculas)", () => {
+  it("aplica transformação de capitalização (Original, MAIÚSCULAS, minúsculas e Iniciais Maiúsculas)", () => {
     expect(
       applyCertificateTextTransform({
         value: "rodrigo de Souza",
@@ -85,6 +85,13 @@ describe("CertificateTextDomainService", () => {
         transform: "uppercase",
       }),
     ).toBe("RODRIGO DE SOUZA E ÁVILA");
+
+    expect(
+      applyCertificateTextTransform({
+        value: "RODRIGO DE SOUZA E ÁVILA",
+        transform: "lowercase",
+      }),
+    ).toBe("rodrigo de souza e ávila");
 
     expect(
       applyCertificateTextTransform({
