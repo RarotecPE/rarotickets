@@ -22,6 +22,8 @@ import {
   Bookmark,
   CheckCircle2,
   CheckSquare,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Crosshair,
   Download,
@@ -203,6 +205,12 @@ export function EventCertificateStudio({
   const [participantFilter, setParticipantFilter] = useState<
     "all" | "selected" | "checkin" | "missing-email"
   >("all");
+  const [participantsPage, setParticipantsPage] = useState(1);
+  const [participantsPageSize, setParticipantsPageSize] = useState(20);
+  const [batchPage, setBatchPage] = useState(1);
+  const [batchPageSize, setBatchPageSize] = useState(20);
+  const [dispatchPage, setDispatchPage] = useState(1);
+  const [dispatchPageSize, setDispatchPageSize] = useState(20);
   const [nexusModalOpen, setNexusModalOpen] = useState(false);
   const [nexusUsers, setNexusUsers] = useState<RaroNexusDirectoryUserOption[]>(
     [],
@@ -754,6 +762,7 @@ export function EventCertificateStudio({
     const next = [newItem, ...recipients];
     setRecipients(next);
     setSelectionConfig(buildCurrentSelectionConfig(next));
+    setParticipantsPage(1);
   }
 
   function handleDeleteExtraRecipient(recipientKey: string): void {
@@ -836,6 +845,7 @@ export function EventCertificateStudio({
       const next = [...toAdd, ...recipients];
       setRecipients(next);
       setSelectionConfig(buildCurrentSelectionConfig(next));
+      setParticipantsPage(1);
       void handleSaveWorkspace({ silent: true, recipientsOverride: next });
     }
 
@@ -1429,6 +1439,55 @@ export function EventCertificateStudio({
     });
   }, [recipients, participantSearch, participantFilter]);
 
+  const selectedRecipients = useMemo(
+    () => recipients.filter((r) => r.selected),
+    [recipients],
+  );
+  const selectedCount = selectedRecipients.length;
+
+  // Paginação - Aba 01 (Participantes)
+  const participantsPageCount = Math.max(
+    1,
+    Math.ceil(filteredRecipients.length / participantsPageSize),
+  );
+  const safeParticipantsPage = Math.min(participantsPage, participantsPageCount);
+  const paginatedParticipants = useMemo(() => {
+    const start = (safeParticipantsPage - 1) * participantsPageSize;
+    return filteredRecipients.slice(start, start + participantsPageSize);
+  }, [filteredRecipients, safeParticipantsPage, participantsPageSize]);
+
+  // Paginação - Aba 03 (Revisão & Lote)
+  const batchPageCount = Math.max(
+    1,
+    Math.ceil(generatedBatch.length / batchPageSize),
+  );
+  const safeBatchPage = Math.min(batchPage, batchPageCount);
+  const paginatedBatch = useMemo(() => {
+    const start = (safeBatchPage - 1) * batchPageSize;
+    return generatedBatch.slice(start, start + batchPageSize);
+  }, [generatedBatch, safeBatchPage, batchPageSize]);
+
+  // Paginação - Aba 04 (Disparo RaroNexus)
+  const dispatchPageCount = Math.max(
+    1,
+    Math.ceil(selectedRecipients.length / dispatchPageSize),
+  );
+  const safeDispatchPage = Math.min(dispatchPage, dispatchPageCount);
+  const paginatedDispatchRecipients = useMemo(() => {
+    const start = (safeDispatchPage - 1) * dispatchPageSize;
+    return selectedRecipients.slice(start, start + dispatchPageSize);
+  }, [selectedRecipients, safeDispatchPage, dispatchPageSize]);
+
+  const includeWithoutCheckIn = Boolean(selectionConfig?.includeWithoutCheckIn);
+
+  useEffect(() => {
+    setParticipantsPage(1);
+  }, [participantSearch, participantFilter, includeWithoutCheckIn]);
+
+  useEffect(() => {
+    setBatchPage(1);
+  }, [generatedBatch.length]);
+
   if (loading) {
     return (
       <Panel>
@@ -1457,8 +1516,6 @@ export function EventCertificateStudio({
     return null;
   }
 
-  const selectedRecipients = recipients.filter((r) => r.selected);
-  const selectedCount = selectedRecipients.length;
   const checkInCount = recipients.filter((r) => r.hasCheckIn).length;
   const issuedCount = selectedRecipients.filter((r) =>
     Boolean(r.authenticationCode),
@@ -1861,7 +1918,7 @@ export function EventCertificateStudio({
                         </td>
                       </tr>
                     ) : (
-                      filteredRecipients.map((r) => (
+                      paginatedParticipants.map((r) => (
                         <tr
                           key={r.recipientKey}
                           className={cn(
@@ -1949,6 +2006,20 @@ export function EventCertificateStudio({
                   </tbody>
                 </table>
               </div>
+
+              <StudioTablePagination
+                total={filteredRecipients.length}
+                page={safeParticipantsPage}
+                pageCount={participantsPageCount}
+                pageSize={participantsPageSize}
+                itemLabel="participante(s)"
+                ariaLabel="Paginação da lista de participantes"
+                onPageChange={setParticipantsPage}
+                onPageSizeChange={(size) => {
+                  setParticipantsPageSize(size);
+                  setParticipantsPage(1);
+                }}
+              />
 
               <div className="flex items-center justify-between border-t border-app-border pt-4">
                 <p className="text-xs text-app-muted-foreground">
@@ -2978,13 +3049,13 @@ export function EventCertificateStudio({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-app-border text-sm">
-                      {generatedBatch.map((item, idx) => (
+                      {paginatedBatch.map((item, idx) => (
                         <tr
                           key={item.recipientKey}
                           className="hover:bg-app-surface-elevated/30"
                         >
                           <td className="px-4 py-2.5 font-mono text-xs text-app-muted-foreground">
-                            {idx + 1}
+                            {(safeBatchPage - 1) * batchPageSize + idx + 1}
                           </td>
                           <td className="px-4 py-2.5 font-semibold text-app-foreground">
                             {item.participantName}
@@ -3031,6 +3102,22 @@ export function EventCertificateStudio({
                   </table>
                 </div>
               )}
+
+              {generatedBatch.length > 0 ? (
+                <StudioTablePagination
+                  total={generatedBatch.length}
+                  page={safeBatchPage}
+                  pageCount={batchPageCount}
+                  pageSize={batchPageSize}
+                  itemLabel="certificado(s)"
+                  ariaLabel="Paginação dos certificados gerados"
+                  onPageChange={setBatchPage}
+                  onPageSizeChange={(size) => {
+                    setBatchPageSize(size);
+                    setBatchPage(1);
+                  }}
+                />
+              ) : null}
 
               <div className="flex items-center justify-between border-t border-app-border pt-4">
                 <Button
@@ -3418,7 +3505,7 @@ export function EventCertificateStudio({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-app-border text-sm">
-                    {selectedRecipients.map((r, idx) => {
+                    {paginatedDispatchRecipients.map((r, idx) => {
                       const isSendingThis =
                         sendingRecipientKey === r.recipientKey;
                       return (
@@ -3427,7 +3514,7 @@ export function EventCertificateStudio({
                           className="hover:bg-app-surface-elevated/30"
                         >
                           <td className="px-4 py-2.5 font-mono text-xs text-app-muted-foreground">
-                            {idx + 1}
+                            {(safeDispatchPage - 1) * dispatchPageSize + idx + 1}
                           </td>
                           <td className="px-4 py-2.5 font-semibold text-app-foreground">
                             {r.name}
@@ -3498,6 +3585,20 @@ export function EventCertificateStudio({
                   </tbody>
                 </table>
               </div>
+
+              <StudioTablePagination
+                total={selectedRecipients.length}
+                page={safeDispatchPage}
+                pageCount={dispatchPageCount}
+                pageSize={dispatchPageSize}
+                itemLabel="destinatário(s)"
+                ariaLabel="Paginação da fila de disparo"
+                onPageChange={setDispatchPage}
+                onPageSizeChange={(size) => {
+                  setDispatchPageSize(size);
+                  setDispatchPage(1);
+                }}
+              />
             </div>
           </Panel>
         </div>
@@ -3743,4 +3844,74 @@ function formatAttachmentSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
+}
+
+const STUDIO_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+
+function StudioTablePagination(params: {
+  total: number;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  itemLabel: string;
+  ariaLabel: string;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) {
+  if (params.total === 0) return null;
+
+  const start = (params.page - 1) * params.pageSize + 1;
+  const end = Math.min(params.total, params.page * params.pageSize);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-app-muted-foreground">
+        <span>
+          Mostrando <strong className="text-app-foreground">{start}–{end}</strong> de{" "}
+          <strong className="text-app-foreground">{params.total}</strong> {params.itemLabel} ·
+          Página <strong className="text-app-foreground">{params.page}</strong> de{" "}
+          <strong className="text-app-foreground">{params.pageCount}</strong>
+        </span>
+        <label className="inline-flex items-center gap-1.5">
+          <span>Por página:</span>
+          <select
+            value={params.pageSize}
+            onChange={(e) => params.onPageSizeChange(Number(e.target.value))}
+            className="h-7 rounded-app-sm border border-app-border bg-app-surface px-1.5 text-xs font-medium text-app-foreground focus:border-app-primary focus:outline-none"
+          >
+            {STUDIO_PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <nav className="flex items-center gap-2" aria-label={params.ariaLabel}>
+        <Button
+          type="button"
+          compact
+          variant="secondary"
+          disabled={params.page <= 1}
+          onClick={() => params.onPageChange(Math.max(1, params.page - 1))}
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          Anterior
+        </Button>
+        <Button
+          type="button"
+          compact
+          variant="secondary"
+          disabled={params.page >= params.pageCount}
+          onClick={() =>
+            params.onPageChange(Math.min(params.pageCount, params.page + 1))
+          }
+        >
+          Próxima
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </nav>
+    </div>
+  );
 }
