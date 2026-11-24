@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1420,23 +1421,25 @@ export function EventCertificateStudio({
 
   const filteredRecipients = useMemo(() => {
     const q = participantSearch.trim().toLowerCase();
-    return recipients.filter((r) => {
-      if (participantFilter === "selected" && !r.selected) return false;
-      if (participantFilter === "checkin" && !r.hasCheckIn) return false;
-      if (
-        participantFilter === "missing-email" &&
-        r.email &&
-        r.email.includes("@")
-      ) {
-        return false;
-      }
-      if (!q) return true;
-      return (
-        r.name.toLowerCase().includes(q) ||
-        r.email.toLowerCase().includes(q) ||
-        (r.registrationCode || "").toLowerCase().includes(q)
-      );
-    });
+    return recipients
+      .filter((r) => {
+        if (participantFilter === "selected" && !r.selected) return false;
+        if (participantFilter === "checkin" && !r.hasCheckIn) return false;
+        if (
+          participantFilter === "missing-email" &&
+          r.email &&
+          r.email.includes("@")
+        ) {
+          return false;
+        }
+        if (!q) return true;
+        return (
+          r.name.toLowerCase().includes(q) ||
+          r.email.toLowerCase().includes(q) ||
+          (r.registrationCode || "").toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => Number(b.selected) - Number(a.selected));
   }, [recipients, participantSearch, participantFilter]);
 
   const selectedRecipients = useMemo(
@@ -3848,6 +3851,23 @@ function formatAttachmentSize(bytes: number): string {
 
 const STUDIO_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
+function buildPaginationItems(
+  current: number,
+  totalPages: number,
+): Array<number | "ellipsis"> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  const items: Array<number | "ellipsis"> = [1];
+  const left = Math.max(2, current - 1);
+  const right = Math.min(totalPages - 1, current + 1);
+  if (left > 2) items.push("ellipsis");
+  for (let p = left; p <= right; p++) items.push(p);
+  if (right < totalPages - 1) items.push("ellipsis");
+  items.push(totalPages);
+  return items;
+}
+
 function StudioTablePagination(params: {
   total: number;
   page: number;
@@ -3858,13 +3878,46 @@ function StudioTablePagination(params: {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
 }) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const anchorTopRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (anchorTopRef.current === null || !barRef.current) return;
+    const prevTop = anchorTopRef.current;
+    anchorTopRef.current = null;
+    const nextTop = barRef.current.getBoundingClientRect().top;
+    const delta = nextTop - prevTop;
+    if (Math.abs(delta) > 1) {
+      window.scrollBy({ top: delta, behavior: "instant" });
+    }
+  }, [params.page, params.pageSize]);
+
   if (params.total === 0) return null;
 
   const start = (params.page - 1) * params.pageSize + 1;
   const end = Math.min(params.total, params.page * params.pageSize);
+  const pageItems = buildPaginationItems(params.page, params.pageCount);
+
+  const changePageAnchored = (nextPage: number) => {
+    if (nextPage === params.page) return;
+    if (barRef.current) {
+      anchorTopRef.current = barRef.current.getBoundingClientRect().top;
+    }
+    params.onPageChange(nextPage);
+  };
+
+  const changePageSizeAnchored = (nextSize: number) => {
+    if (barRef.current) {
+      anchorTopRef.current = barRef.current.getBoundingClientRect().top;
+    }
+    params.onPageSizeChange(nextSize);
+  };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+    <div
+      ref={barRef}
+      className="flex flex-wrap items-center justify-between gap-3 pt-1"
+    >
       <div className="flex flex-wrap items-center gap-3 text-xs text-app-muted-foreground">
         <span>
           Mostrando <strong className="text-app-foreground">{start}–{end}</strong> de{" "}
@@ -3876,7 +3929,7 @@ function StudioTablePagination(params: {
           <span>Por página:</span>
           <select
             value={params.pageSize}
-            onChange={(e) => params.onPageSizeChange(Number(e.target.value))}
+            onChange={(e) => changePageSizeAnchored(Number(e.target.value))}
             className="h-7 rounded-app-sm border border-app-border bg-app-surface px-1.5 text-xs font-medium text-app-foreground focus:border-app-primary focus:outline-none"
           >
             {STUDIO_PAGE_SIZE_OPTIONS.map((size) => (
@@ -3888,24 +3941,55 @@ function StudioTablePagination(params: {
         </label>
       </div>
 
-      <nav className="flex items-center gap-2" aria-label={params.ariaLabel}>
+      <nav className="flex flex-wrap items-center gap-1.5" aria-label={params.ariaLabel}>
         <Button
           type="button"
           compact
           variant="secondary"
           disabled={params.page <= 1}
-          onClick={() => params.onPageChange(Math.max(1, params.page - 1))}
+          onClick={() => changePageAnchored(Math.max(1, params.page - 1))}
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           Anterior
         </Button>
+
+        {params.pageCount > 1 ? (
+          <div className="hidden items-center gap-1 sm:flex">
+            {pageItems.map((item, idx) =>
+              item === "ellipsis" ? (
+                <span
+                  key={`ellipsis-${idx}`}
+                  className="px-1.5 text-xs text-app-muted-foreground"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => changePageAnchored(item)}
+                  aria-current={item === params.page ? "page" : undefined}
+                  className={cn(
+                    "inline-flex h-8 min-w-8 items-center justify-center rounded-app-md px-2 text-xs font-semibold transition cursor-pointer",
+                    item === params.page
+                      ? "bg-app-primary text-white"
+                      : "border border-app-border bg-app-surface text-app-foreground hover:bg-app-surface-elevated",
+                  )}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+          </div>
+        ) : null}
+
         <Button
           type="button"
           compact
           variant="secondary"
           disabled={params.page >= params.pageCount}
           onClick={() =>
-            params.onPageChange(Math.min(params.pageCount, params.page + 1))
+            changePageAnchored(Math.min(params.pageCount, params.page + 1))
           }
         >
           Próxima
